@@ -1,0 +1,11 @@
+# Sancho
+
+Sancho is an offline-first Android project for running local language and vision models directly on a phone.
+
+The initial target is a Pixel 9a running GrapheneOS. The project is designed around privacy, local processing, and user control: model files are provided explicitly, inference happens on the device, and the application does not depend on cloud services for its core experience.
+
+The repository is terminal-first. Its development and verification workflow is intended to work without Android Studio, using reproducible tooling, explicit checks, and documented constraints.
+
+The project will evolve in small, reviewable steps. The first milestone is a reliable local chat foundation; agent actions, phone tools, and broader automation will be considered only after that foundation is stable.
+
+Detailed Version 1 scope, implementation notes, and usage instructions will be added separately as the Android implementation develops.

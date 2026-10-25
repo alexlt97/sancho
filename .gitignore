@@ -1,0 +1,12 @@
+.gradle/
+build/
+*/build/
+local.properties
+*.iml
+.idea/
+*.apk
+*.aab
+*.gguf
+*.task
+.harness/traces/traces.jsonl
+.tooling/
