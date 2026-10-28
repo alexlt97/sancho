@@ -12,7 +12,9 @@ EMULATOR_MEMORY="${UNPLUGGED_EMULATOR_MEMORY:-1536}"
 EMULATOR_SKIN="${UNPLUGGED_EMULATOR_SKIN:-720x1280}"
 EMULATOR_SCALE="${UNPLUGGED_EMULATOR_SCALE:-0.75}"
 EMULATOR_VSYNC_RATE="${UNPLUGGED_EMULATOR_VSYNC_RATE:-30}"
+EMULATOR_QT_PLATFORM="${UNPLUGGED_QT_PLATFORM:-xcb}"
 EMULATOR_NICE="${UNPLUGGED_EMULATOR_NICE:-15}"
+PREVIEW_HEADLESS="${UNPLUGGED_PREVIEW_HEADLESS:-0}"
 EMULATOR="$SDK_ROOT/emulator/emulator"
 ADB="$SDK_ROOT/platform-tools/adb"
 GRADLE="$ROOT/gradlew"
@@ -90,7 +92,10 @@ start_preview() {
   serial="$(emulator_serial)"
   if [[ -z "$serial" ]]; then
     mkdir -p "$AVD_HOME"
-    echo "Starting $AVD_NAME with $GPU_MODE graphics, $EMULATOR_CORES emulator core, ${EMULATOR_MEMORY}MB RAM, ${EMULATOR_SKIN} display at ${EMULATOR_VSYNC_RATE}Hz..."
+    echo "Starting $AVD_NAME with $GPU_MODE graphics, $EMULATOR_CORES emulator core, ${EMULATOR_MEMORY}MB RAM, ${EMULATOR_SKIN} display at ${EMULATOR_VSYNC_RATE}Hz via Qt $EMULATOR_QT_PLATFORM..."
+    export QT_QPA_PLATFORM="$EMULATOR_QT_PLATFORM"
+    export QT_AUTO_SCREEN_SCALE_FACTOR=0
+    export QT_ENABLE_HIGHDPI_SCALING=0
     local -a emulator_command=(nice -n "$EMULATOR_NICE")
     if command -v taskset >/dev/null 2>&1; then
       emulator_command+=(taskset -c 0)
@@ -109,6 +114,9 @@ start_preview() {
       -no-boot-anim
       -no-audio
     )
+    if [[ "$PREVIEW_HEADLESS" == "1" ]]; then
+      emulator_command+=(-no-window)
+    fi
     "${emulator_command[@]}" >"$LOG_FILE" 2>&1 &
     local emulator_pid=$!
     printf '%s\n' "$emulator_pid" >"$PID_FILE"
