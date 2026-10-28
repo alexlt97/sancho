@@ -3,8 +3,8 @@
 ## Current State
 
 - Last commit: none (initial repository bootstrap)
-- Verification status: `make check` and `make e2e` pass; native image inference, Markdown response rendering, and response timing are verified on the Pixel 9a AI profile
-- Product status: text chat and native Gemma image requests are wired; assistant Markdown, inline math, and response-time presentation are included; the chat composer now has compact icon controls, a dark galaxy theme, and the Sancho launcher icon; a conservative one-command local emulator preview uses a deterministic streaming mock model, while phone builds use LiteRT-LM; GPU inference remains verified through a separate benchmark path
+- Verification status: `make check` and `make e2e` pass; native image inference, Markdown response rendering, and time-to-first-token presentation are verified on the Pixel 9a AI profile
+- Product status: text chat and native Gemma image requests are wired; assistant Markdown, inline math, time-to-first-token presentation, subtle role-colored message surfaces, explicit edge-to-edge keyboard-safe composer layout, free scrolling during generation, cancellation for long generations, and a jump-to-latest control are included; new message rows are revealed automatically without forcing the list position during streaming; model status and import now live behind a top-right settings screen, with a compact ready/loading/generating/unavailable status LED beside the settings icon; the chat composer now has compact send/stop icon controls, a dark galaxy theme, safe system-bar spacing, and the Sancho launcher icon; a conservative one-command local emulator preview uses a deterministic streaming mock model, while phone builds use LiteRT-LM; GPU inference remains verified through a separate benchmark path
 - Target: Pixel 9a running GrapheneOS
 
 ## In Progress
@@ -13,9 +13,8 @@
 
 ## Next Steps
 
-1. Add cancellation for long generations and continue improving chat presentation.
-2. Add structured tool calls and confirmation gates for agent actions.
-3. Add an explicit backend policy or user setting if GPU startup latency is acceptable.
+1. Add structured tool calls and confirmation gates for agent actions.
+2. Add an explicit backend policy or user setting if GPU startup latency is acceptable.
 
 ## CPU baseline
 
