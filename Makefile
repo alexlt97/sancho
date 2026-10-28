@@ -1,4 +1,4 @@
-.PHONY: setup build safety instrumentation-build install launch uninstall test check dev preview preview-stop e2e benchmark gpu-benchmark device check-arch vcr verify-feature session-start session-end clean-check
+.PHONY: setup build safety instrumentation-build install launch uninstall test check dev preview preview-stop e2e benchmark gpu-benchmark vision-benchmark device reports-analyze check-arch vcr verify-feature session-start session-end clean-check
 
 setup:
 	@bash scripts/bootstrap-toolchain.sh
@@ -45,8 +45,15 @@ benchmark:
 gpu-benchmark:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh gpu-benchmark
 
+vision-benchmark:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh vision-benchmark
+
 device:
 	@bash scripts/with-toolchain.sh adb devices -l
+
+reports-analyze:
+	@test -n "$(FILE)" || (echo "Usage: make reports-analyze FILE=/path/to/sancho_report.zip" >&2; exit 2)
+	@python3 scripts/analyze-reports.py "$(FILE)"
 
 check-arch:
 	@bash scripts/check-arch.sh

@@ -156,8 +156,29 @@ case "${1:-}" in
     grep -q 'gpu_benchmark=' <<<"$instrumentation_output" || fail "GPU benchmark metrics were not reported."
     echo "[PASS] GPU benchmark completed only for $TARGET_USER_NAME user $USER_ID"
     ;;
+  vision-benchmark)
+    select_target
+    assemble_app
+    assemble_tests
+    install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
+    install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
+    verify_installed_for_ai
+    set +e
+    instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
+      -e class com.unplugged.app.VisionCpuBenchmarkTest,com.unplugged.app.VisionGpuBenchmarkTest \
+      "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
+    instrumentation_status=$?
+    set -e
+    printf '%s\n' "$instrumentation_output"
+    (( instrumentation_status == 0 )) || fail "Vision benchmark command failed with exit code $instrumentation_status."
+    grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "Vision benchmark reported test failures."
+    grep -q '^OK (' <<<"$instrumentation_output" || fail "Vision benchmark did not report a successful test summary."
+    grep -q 'vision_cpu_benchmark=' <<<"$instrumentation_output" || fail "CPU vision metrics were not reported."
+    grep -q 'vision_gpu_benchmark=' <<<"$instrumentation_output" || fail "GPU vision metrics were not reported."
+    echo "[PASS] CPU/GPU vision benchmark completed only for $TARGET_USER_NAME user $USER_ID"
+    ;;
   *)
-    echo "Usage: $0 {install|launch|uninstall|e2e|benchmark|gpu-benchmark}" >&2
+    echo "Usage: $0 {install|launch|uninstall|e2e|benchmark|gpu-benchmark|vision-benchmark}" >&2
     exit 2
     ;;
 esac
