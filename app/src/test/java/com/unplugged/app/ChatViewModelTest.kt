@@ -57,7 +57,7 @@ class ChatViewModelTest {
                 "Assistant: Fake answer to: hello",
                 viewModel.uiState.value.messages.last().let { "${it.author}: ${it.text}" },
             )
-            assertTrue(viewModel.uiState.value.messages.last().responseTimeMillis != null)
+            assertTrue(viewModel.uiState.value.messages.last().timeToFirstTokenMillis != null)
         } finally {
             Dispatchers.resetMain()
         }
@@ -83,7 +83,34 @@ class ChatViewModelTest {
             val assistant = viewModel.uiState.value.messages.last()
             assertEquals("Assistant", assistant.author)
             assertTrue(assistant.text.contains("Mock response"))
-            assertTrue(assistant.responseTimeMillis != null)
+            assertTrue(assistant.timeToFirstTokenMillis != null)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun cancelGenerationStopsAndPreservesPartialResponse() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val viewModel = ChatViewModel(localLlm = CancellableFakeLocalLlm())
+            viewModel.loadModel(
+                ImportedModel("fake.litertlm", 1L, File("fake.litertlm")),
+            )
+            advanceUntilIdle()
+
+            viewModel.updateDraft("long prompt")
+            viewModel.send()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isGenerating)
+            viewModel.cancelGeneration()
+            advanceUntilIdle()
+
+            assertTrue(!viewModel.uiState.value.isGenerating)
+            assertEquals("Generation stopped.", viewModel.uiState.value.status)
+            assertEquals("Partial response", viewModel.uiState.value.messages.last().text)
         } finally {
             Dispatchers.resetMain()
         }

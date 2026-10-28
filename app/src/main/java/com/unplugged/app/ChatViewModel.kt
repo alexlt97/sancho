@@ -5,6 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +18,7 @@ import kotlinx.coroutines.launch
 data class ChatMessage(
     val author: String,
     val text: String,
-    val responseTimeMillis: Long? = null,
+    val timeToFirstTokenMillis: Long? = null,
 )
 
 data class ChatUiState(
@@ -35,6 +39,7 @@ class ChatViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+    private var generationJob: Job? = null
 
     init {
         if (initialModelReady) {
@@ -93,14 +98,18 @@ class ChatViewModel(
             return
         }
 
-        viewModelScope.launch {
+        generationJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 status = "Generating locally…",
                 isGenerating = true,
             )
             val startedAtNanos = System.nanoTime()
+            var timeToFirstTokenMillis: Long? = null
             try {
                 llm.stream(LlmRequest(prompt = prompt, imageFile = imageAttachment?.file)).collect { chunk ->
+                    if (timeToFirstTokenMillis == null && chunk.isNotEmpty()) {
+                        timeToFirstTokenMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                    }
                     val messages = _uiState.value.messages
                     val last = messages.lastOrNull()
                     val updatedMessages = if (last?.author == "Assistant") {
@@ -110,26 +119,35 @@ class ChatViewModel(
                     }
                     _uiState.value = _uiState.value.copy(messages = updatedMessages)
                 }
-                val responseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                currentCoroutineContext().ensureActive()
                 val state = _uiState.value
                 val lastMessage = state.messages.lastOrNull()
                 _uiState.value = if (lastMessage?.author == "Assistant") {
                     state.copy(
                         status = "Local model ready.",
                         messages = state.messages.dropLast(1) +
-                            lastMessage.copy(responseTimeMillis = responseTimeMillis),
+                            lastMessage.copy(timeToFirstTokenMillis = timeToFirstTokenMillis),
                     )
                 } else {
                     state.copy(status = "Local model ready.")
                 }
+            } catch (_: CancellationException) {
+                _uiState.value = _uiState.value.copy(status = "Generation stopped.")
             } catch (error: Exception) {
                 _uiState.value = _uiState.value.copy(
                     status = "Local inference failed: ${error.message ?: "unknown error"}",
                 )
             } finally {
                 _uiState.value = _uiState.value.copy(isGenerating = false)
+                generationJob = null
             }
         }
+    }
+
+    fun cancelGeneration() {
+        if (!_uiState.value.isGenerating) return
+        _uiState.value = _uiState.value.copy(status = "Stopping…")
+        generationJob?.cancel()
     }
 
     fun importModel(uri: Uri) {
