@@ -37,6 +37,102 @@ class MarkdownTest {
     }
 
     @Test
+    fun normalizesCommonLatexMathCommands() {
+        val result = "${'$'}\\sum_{k=0}^{n} \\frac{n!}{k!(n-k)!}${'$'}".toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("∑"))
+        assertTrue(result.text.contains("(n!)/(k!(n-k)!)"))
+        assertTrue(result.spanStyles.any { it.item.baselineShift != null })
+    }
+
+    @Test
+    fun normalizesNestedMathAndMultilineDisplayBlocks() {
+        val result = """
+            The quadratic formula is:
+            $$
+            x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
+            $$
+        """.trimIndent().toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("x = (-b ± √(b2-4ac))/(2a)"))
+    }
+
+    @Test
+    fun removesCommonLatexTextWrappers() {
+        val result = "${'$'}\\text{where} x \\in \\mathbb{R}${'$'}".toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("where x ∈ ℝ"))
+    }
+
+    @Test
+    fun formatsCalculusAndMatrixCommands() {
+        val result = """
+            $$
+            \int_0^\infty e^{-x^2} dx = \sqrt{\pi}
+            \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+            $$
+        """.trimIndent().toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("∫"))
+        assertTrue(result.text.contains("∞"))
+        assertTrue(result.text.contains("√(π)"))
+        assertTrue(result.text.contains("a"))
+        assertTrue(result.text.contains("b"))
+        assertTrue(result.text.contains("c"))
+        assertTrue(result.text.contains("d"))
+        assertTrue(result.text.contains(")"))
+        assertTrue(result.text.none { it == '\\' })
+    }
+
+    @Test
+    fun formatsFourierTransformAndSeriesNotation() {
+        val result = """
+            $$
+            \hat{f}(\xi) = \int_{-\infty}^{\infty} f(x)e^{-2\pi i x \xi}\,dx
+            $$
+            ${'$'}${'$'}f(x) = a_0 + \sum_{n=1}^{\infty}(a_n\cos(nx)+b_n\sin(nx))${'$'}${'$'}
+        """.trimIndent().toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("f̂(ξ)"))
+        assertTrue(result.text.contains("∫"))
+        assertTrue(result.text.contains("-∞"))
+        assertTrue(result.text.contains("2π"))
+        assertTrue(result.text.contains("cos"))
+        assertTrue(result.text.contains("sin"))
+        assertTrue(result.text.none { it == '\\' })
+    }
+
+    @Test
+    fun formatsBoldMathAndMatrices() {
+        val result = """
+            $$
+            \begin{bmatrix}
+            \boldsymbol{a} & b \\
+            c & d
+            \end{bmatrix}
+            $$
+        """.trimIndent().toMarkdownAnnotatedString()
+
+        assertTrue(result.text.contains("a"))
+        assertTrue(result.text.contains("b"))
+        assertTrue(result.text.contains("c"))
+        assertTrue(result.text.contains("d"))
+        assertTrue(result.text.none { it == '\\' })
+        assertTrue(result.spanStyles.any { it.item.fontWeight == FontWeight.Bold })
+    }
+
+    @Test
+    fun parsesMarkdownTablesAsBlocks() {
+        val blocks = parseMarkdownBlocks(
+            "| A | B |\n| --- | --- |\n| 1 | 2 |",
+        )
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(listOf("A", "B"), table.headers)
+        assertEquals(listOf(listOf("1", "2")), table.rows)
+    }
+
+    @Test
     fun formatsResponseTimeInMillisecondsAndSeconds() {
         assertEquals("850 ms", formatResponseTime(850L))
         assertEquals("1.25 s", formatResponseTime(1_250L))
