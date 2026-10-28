@@ -10,3 +10,7 @@ local.properties
 *.task
 .harness/traces/traces.jsonl
 .tooling/
+reports/
+sancho_report.zip
+sancho_report.analysis.json
+sancho_report.analysis.md
