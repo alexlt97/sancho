@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 data class ChatMessage(
     val author: String,
     val text: String,
+    val imageAttachment: ImageAttachment? = null,
     val timeToFirstTokenMillis: Long? = null,
 )
 
@@ -85,7 +86,11 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(
             draft = "",
             imageAttachment = null,
-            messages = _uiState.value.messages + ChatMessage("You", prompt),
+            messages = _uiState.value.messages + ChatMessage(
+                author = "You",
+                text = prompt,
+                imageAttachment = imageAttachment,
+            ),
         )
 
         val llm = localLlm ?: run {
@@ -107,15 +112,25 @@ class ChatViewModel(
             var timeToFirstTokenMillis: Long? = null
             try {
                 llm.stream(LlmRequest(prompt = prompt, imageFile = imageAttachment?.file)).collect { chunk ->
-                    if (timeToFirstTokenMillis == null && chunk.isNotEmpty()) {
-                        timeToFirstTokenMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                    val firstTokenMillis = if (timeToFirstTokenMillis == null && chunk.isNotEmpty()) {
+                        (System.nanoTime() - startedAtNanos) / 1_000_000L
+                    } else {
+                        null
                     }
+                    timeToFirstTokenMillis = timeToFirstTokenMillis ?: firstTokenMillis
                     val messages = _uiState.value.messages
                     val last = messages.lastOrNull()
                     val updatedMessages = if (last?.author == "Assistant") {
-                        messages.dropLast(1) + last.copy(text = last.text + chunk)
+                        messages.dropLast(1) + last.copy(
+                            text = last.text + chunk,
+                            timeToFirstTokenMillis = last.timeToFirstTokenMillis ?: firstTokenMillis,
+                        )
                     } else {
-                        messages + ChatMessage("Assistant", chunk)
+                        messages + ChatMessage(
+                            author = "Assistant",
+                            text = chunk,
+                            timeToFirstTokenMillis = firstTokenMillis,
+                        )
                     }
                     _uiState.value = _uiState.value.copy(messages = updatedMessages)
                 }

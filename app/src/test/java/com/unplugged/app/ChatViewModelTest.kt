@@ -105,6 +105,7 @@ class ChatViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.isGenerating)
+            assertTrue(viewModel.uiState.value.messages.last().timeToFirstTokenMillis != null)
             viewModel.cancelGeneration()
             advanceUntilIdle()
 
@@ -134,6 +135,7 @@ class ChatViewModelTest {
             assertEquals(image, fakeLlm.lastRequest?.imageFile)
             assertEquals("Describe this image.", fakeLlm.lastRequest?.prompt)
             assertEquals(null, viewModel.uiState.value.imageAttachment)
+            assertEquals(image, viewModel.uiState.value.messages.first().imageAttachment?.file)
         } finally {
             Dispatchers.resetMain()
         }

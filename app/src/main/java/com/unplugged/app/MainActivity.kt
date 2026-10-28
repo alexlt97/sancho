@@ -1,5 +1,6 @@
 package com.unplugged.app
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.ComponentActivity
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -38,11 +40,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -51,6 +55,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -58,6 +65,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -65,7 +73,10 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val GalaxyColors = darkColorScheme(
     primary = Color(0xFF7EE787),
@@ -138,6 +149,8 @@ class MainActivity : ComponentActivity() {
 private fun ColumnScope.SettingsPanel(
     state: ChatUiState,
     onImportModel: () -> Unit,
+    reportCount: Int,
+    onOpenReports: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -189,12 +202,229 @@ private fun ColumnScope.SettingsPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Button(
+                    onClick = onOpenReports,
+                    enabled = !state.isImportingModel && !state.isGenerating,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary,
+                    ),
+                ) {
+                    Text("Reports ($reportCount)")
+                }
             }
         }
         Text(
             text = "Models are stored in Sancho’s private app storage and remain on this device.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.ReportPanel(
+    state: ReportUiState,
+    editingReportId: String?,
+    onEditingReportIdChange: (String?) -> Unit,
+    onSave: (IssueReport) -> Unit,
+    onDelete: (String) -> Unit,
+    onAddScreenshot: (String) -> Unit,
+    onExport: () -> Unit,
+) {
+    val selectedReport = state.reports.firstOrNull { it.id == editingReportId }
+    var category by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.category ?: "Bug")
+    }
+    var title by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.title.orEmpty())
+    }
+    var description by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.description.orEmpty())
+    }
+    var reproductionSteps by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.reproductionSteps.orEmpty())
+    }
+    var expectedBehavior by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.expectedBehavior.orEmpty())
+    }
+    var actualBehavior by remember(editingReportId, selectedReport?.updatedAtMillis) {
+        mutableStateOf(selectedReport?.actualBehavior.orEmpty())
+    }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(onClick = { onEditingReportIdChange(null) }) {
+                Text("New report")
+            }
+            Button(
+                onClick = onExport,
+                enabled = state.reports.isNotEmpty() && !state.isWorking,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ActionGreen,
+                    contentColor = Color.White,
+                ),
+            ) {
+                Text("Export reports")
+            }
+        }
+
+        state.status?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (state.reports.isNotEmpty()) {
+            Text("Saved reports", style = MaterialTheme.typography.titleMedium)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(state.reports, key = { it.id }) { report ->
+                    TextButton(
+                        onClick = { onEditingReportIdChange(report.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(report.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                text = report.category,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            Text(
+                text = "No saved reports. Create one when you find a bug or missing feature.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Text("Report details", style = MaterialTheme.typography.titleMedium)
+        TextButton(onClick = { category = if (category == "Bug") "Missing feature" else "Bug" }) {
+            Text("Type: $category")
+        }
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Title") },
+            singleLine = true,
+        )
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = description,
+            onValueChange = { description = it },
+            label = { Text("Description") },
+            minLines = 2,
+            maxLines = 4,
+        )
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = reproductionSteps,
+            onValueChange = { reproductionSteps = it },
+            label = { Text("Reproduction steps (optional)") },
+            minLines = 1,
+            maxLines = 3,
+        )
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = expectedBehavior,
+            onValueChange = { expectedBehavior = it },
+            label = { Text("Expected behavior (optional)") },
+            minLines = 1,
+            maxLines = 3,
+        )
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = actualBehavior,
+            onValueChange = { actualBehavior = it },
+            label = { Text("Actual behavior (optional)") },
+            minLines = 1,
+            maxLines = 3,
+        )
+        selectedReport?.screenshotFiles?.let { screenshots ->
+            screenshots.forEach { screenshot ->
+                Text(
+                    text = "Screenshot: $screenshot",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    val now = System.currentTimeMillis()
+                    onSave(
+                        IssueReport(
+                            id = selectedReport?.id ?: UUID.randomUUID().toString(),
+                            category = category,
+                            title = title.trim(),
+                            description = description.trim(),
+                            reproductionSteps = reproductionSteps.trim(),
+                            expectedBehavior = expectedBehavior.trim(),
+                            actualBehavior = actualBehavior.trim(),
+                            createdAtMillis = selectedReport?.createdAtMillis ?: now,
+                            updatedAtMillis = now,
+                            screenshotFiles = selectedReport?.screenshotFiles.orEmpty(),
+                        ),
+                    )
+                },
+                enabled = title.isNotBlank() && description.isNotBlank() && !state.isWorking,
+            ) {
+                Text("Save report")
+            }
+            if (selectedReport != null) {
+                TextButton(
+                    onClick = { onAddScreenshot(selectedReport.id) },
+                    enabled = !state.isWorking,
+                ) {
+                    Text("Add screenshot")
+                }
+                TextButton(
+                    onClick = { confirmDelete = true },
+                    enabled = !state.isWorking,
+                ) {
+                    Text("Delete")
+                }
+            }
+        }
+    }
+
+    if (confirmDelete && selectedReport != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete report?") },
+            text = { Text("This removes the report and its screenshots from Sancho.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete(selectedReport.id)
+                    },
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
         )
     }
 }
@@ -242,10 +472,24 @@ private fun SanchoChat(
     )
     val state by chatViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val reportStore = remember(context) {
+        ReportStore(
+            contentResolver = context.contentResolver,
+            reportsDirectory = File(context.filesDir, "reports"),
+            cacheDirectory = context.cacheDir,
+        )
+    }
+    val reportViewModel: ReportViewModel = viewModel(
+        factory = ReportViewModel.factory(reportStore),
+    )
+    val reportState by reportViewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     var showSettings by remember { mutableStateOf(false) }
+    var showReports by remember { mutableStateOf(false) }
+    var editingReportId by remember { mutableStateOf<String?>(null) }
+    var screenshotReportId by remember { mutableStateOf<String?>(null) }
     val messageListState = rememberLazyListState()
     val isNearLatestMessage by remember {
         derivedStateOf {
@@ -298,6 +542,20 @@ private fun SanchoChat(
             }
         },
     )
+    val reportExportPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+        onResult = { uri -> uri?.let(reportViewModel::export) },
+    )
+    val reportScreenshotPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            val report = reportState.reports.firstOrNull { it.id == screenshotReportId }
+            screenshotReportId = null
+            if (uri != null && report != null) {
+                reportViewModel.addScreenshot(report, uri)
+            }
+        },
+    )
 
     Column(
         modifier = Modifier
@@ -310,18 +568,30 @@ private fun SanchoChat(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (showSettings) Arrangement.Start else Arrangement.End,
+            horizontalArrangement = if (showSettings || showReports) {
+                Arrangement.Start
+            } else {
+                Arrangement.End
+            },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (showSettings) {
-                IconButton(onClick = { showSettings = false }) {
+            if (showReports || showSettings) {
+                IconButton(
+                    onClick = {
+                        if (showReports) {
+                            showReports = false
+                        } else {
+                            showSettings = false
+                        }
+                    },
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_back_24),
                         contentDescription = "Back to chat",
                     )
                 }
                 Text(
-                    text = "Settings",
+                    text = if (showReports) "Reports" else "Settings",
                     style = MaterialTheme.typography.titleLarge,
                 )
             } else {
@@ -330,7 +600,10 @@ private fun SanchoChat(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(
-                    onClick = { showSettings = true },
+                    onClick = {
+                        showSettings = true
+                        showReports = false
+                    },
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_settings_24),
@@ -341,10 +614,36 @@ private fun SanchoChat(
             }
         }
 
-        if (showSettings) {
+        if (showReports) {
+            ReportPanel(
+                state = reportState,
+                editingReportId = editingReportId,
+                onEditingReportIdChange = { editingReportId = it },
+                onSave = {
+                    editingReportId = it.id
+                    reportViewModel.save(it)
+                },
+                onDelete = {
+                    reportViewModel.delete(it)
+                    editingReportId = null
+                },
+                onAddScreenshot = { reportId ->
+                    screenshotReportId = reportId
+                    reportScreenshotPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onExport = { reportExportPicker.launch("sancho_report.zip") },
+            )
+        } else if (showSettings) {
             SettingsPanel(
                 state = state,
                 onImportModel = { modelPicker.launch(arrayOf("*/*")) },
+                reportCount = reportState.reports.size,
+                onOpenReports = {
+                    showReports = true
+                    editingReportId = null
+                },
             )
         } else {
             HorizontalDivider(
@@ -365,7 +664,15 @@ private fun SanchoChat(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("Image: ${attachment.displayName}")
+                    ImageThumbnail(
+                        file = attachment.file,
+                        contentDescription = "Preview of ${attachment.displayName}",
+                        modifier = Modifier.size(72.dp),
+                    )
+                    Text(
+                        text = "Image: ${attachment.displayName}",
+                        modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                    )
                     TextButton(
                         onClick = chatViewModel::removeImage,
                         enabled = !state.isGenerating,
@@ -406,17 +713,24 @@ private fun SanchoChat(
                                 GalaxyColors.secondary
                             },
                         )
-                        if (message.author == "Assistant") {
-                            MarkdownText(message.text)
-                        } else {
-                            Text(message.text)
-                        }
                         message.timeToFirstTokenMillis?.let { elapsedMillis ->
                             Text(
-                                text = "Time to first token: ${formatResponseTime(elapsedMillis)}",
+                                text = "TTFT: ${formatResponseTime(elapsedMillis)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                        if (message.author == "Assistant") {
+                            MarkdownText(message.text)
+                        } else {
+                            message.imageAttachment?.let { attachment ->
+                                ImageThumbnail(
+                                    file = attachment.file,
+                                    contentDescription = "Image used in prompt: ${attachment.displayName}",
+                                    modifier = Modifier.size(88.dp),
+                                )
+                            }
+                            Text(message.text)
                         }
                     }
                 }
@@ -555,6 +869,55 @@ private fun SanchoChat(
         }
     }
 }
+}
+
+@Composable
+private fun ImageThumbnail(
+    file: File,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, file.absolutePath) {
+        value = withContext(Dispatchers.IO) { decodeThumbnail(file) }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(MaterialTheme.shapes.small),
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "Image",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun decodeThumbnail(file: File, maxDimension: Int = 512): ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > maxDimension ||
+        bounds.outHeight / sampleSize > maxDimension
+    ) {
+        sampleSize *= 2
+    }
+
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    return BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
 }
 
 @Composable
