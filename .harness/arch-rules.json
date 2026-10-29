@@ -1,0 +1,9 @@
+[
+  {
+    "id": "ARCH-001",
+    "description": "Keep model access behind LocalLlm",
+    "what": "Model runtime calls must be made through the LocalLlm abstraction.",
+    "why": "This keeps UI and domain code testable and permits fake LLM implementations.",
+    "fix": "Move direct LiteRT-LM calls into the model adapter and expose only LocalLlm to the domain layer."
+  }
+]

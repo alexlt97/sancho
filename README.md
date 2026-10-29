@@ -8,4 +8,6 @@ The repository is terminal-first. Its development and verification workflow is i
 
 The project will evolve in small, reviewable steps. The first milestone is a reliable local chat foundation; agent actions, phone tools, and broader automation will be considered only after that foundation is stable.
 
-Detailed Version 1 scope, implementation notes, and usage instructions will be added separately as the Android implementation develops.
+See [Version 1 scope and development notes](docs/v1.md) for the current implementation details, terminal workflow, and known boundaries.
+
+See [Version 2 planning](docs/v2.md) for the future tool-calling, internet, terminal, SSH, and phone-action roadmap.

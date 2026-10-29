@@ -1,0 +1,13 @@
+{
+  "purpose": "Repository-local policy for coding agents",
+  "allowed": [
+    "Read repository files",
+    "Run make check and other documented verification commands",
+    "Edit source, tests, documentation, and harness state files"
+  ],
+  "restricted": [
+    "Do not add network permissions without a decision entry",
+    "Do not download model binaries during tests",
+    "Do not execute unrestricted phone actions or arbitrary shell commands from model output"
+  ]
+}

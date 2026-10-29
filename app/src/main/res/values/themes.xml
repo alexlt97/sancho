@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Sancho" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#7EE787</item>
+        <item name="android:navigationBarColor">#090711</item>
+        <item name="android:statusBarColor">#090711</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

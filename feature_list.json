@@ -1,0 +1,45 @@
+[
+  {
+    "id": "F000",
+    "behavior": "Repository harness has reproducible state files and a passing local check.",
+    "verification": "make check",
+    "state": "passing",
+    "evidence": "all declared verification layers passed; verified 2026-10-22",
+    "layers": [
+      {
+        "label": "static",
+        "cmd": "make check",
+        "repair": "Read the first failing check and repair the named harness file before proceeding."
+      },
+      {
+        "label": "runtime",
+        "cmd": "ALLOW_ACTIVE=1 make clean-check",
+        "repair": "Restore the required state files and remove generated debug artifacts."
+      }
+    ]
+  },
+  {
+    "id": "F001",
+    "behavior": "A minimal offline chat shell compiles, passes JVM tests, and can be installed from terminal commands.",
+    "verification": "make build && make test && make install",
+    "state": "passing",
+    "evidence": "all declared verification layers passed; verified 2026-10-25",
+    "layers": [
+      {
+        "label": "static",
+        "cmd": "make check",
+        "repair": "Run make setup, then repair the first Gradle, lint, or architecture failure."
+      },
+      {
+        "label": "runtime",
+        "cmd": "make build && make test",
+        "repair": "Inspect the first failing Gradle task and fix the project or test named by the failure."
+      },
+      {
+        "label": "device",
+        "cmd": "make install",
+        "repair": "Connect and authorize the Pixel 9a with USB debugging, then rerun make install."
+      }
+    ]
+  }
+]
