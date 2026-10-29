@@ -78,6 +78,37 @@ verify_installed_for_ai() {
     || fail "$APP_PACKAGE is not installed for AI user $USER_ID."
 }
 
+prepare_instrumentation() {
+  assemble_app
+  assemble_tests
+  install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
+  install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
+  verify_installed_for_ai
+}
+
+run_instrumentation() {
+  local label="$1"
+  local test_classes="$2"
+  shift 2
+  local required_metric
+
+  set +e
+  instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
+    -e class "$test_classes" \
+    "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
+  instrumentation_status=$?
+  set -e
+
+  printf '%s\n' "$instrumentation_output"
+  (( instrumentation_status == 0 )) || fail "$label command failed with exit code $instrumentation_status."
+  grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "$label reported test failures."
+  grep -q '^OK (' <<<"$instrumentation_output" || fail "$label did not report a successful test summary."
+  for required_metric in "$@"; do
+    grep -q "$required_metric" <<<"$instrumentation_output" || fail "$label did not report $required_metric."
+  done
+  echo "[PASS] $label completed only for $TARGET_USER_NAME user $USER_ID"
+}
+
 case "${1:-}" in
   install)
     select_target
@@ -99,83 +130,25 @@ case "${1:-}" in
     ;;
   e2e)
     select_target
-    assemble_app
-    assemble_tests
-    install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
-    install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
-    verify_installed_for_ai
-    set +e
-    instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
-      -e class com.unplugged.app.MainActivityTest,com.unplugged.app.MainActivityComposerTest \
-      "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
-    instrumentation_status=$?
-    set -e
-    printf '%s\n' "$instrumentation_output"
-    (( instrumentation_status == 0 )) || fail "Instrumentation command failed with exit code $instrumentation_status."
-    grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "Instrumentation reported test failures."
-    grep -q '^OK (' <<<"$instrumentation_output" || fail "Instrumentation did not report a successful test summary."
-    echo "[PASS] Instrumentation completed only for $TARGET_USER_NAME user $USER_ID"
+    prepare_instrumentation
+    run_instrumentation "Instrumentation" "com.unplugged.app.MainActivityTest,com.unplugged.app.MainActivityComposerTest"
     ;;
   benchmark)
     select_target
-    assemble_app
-    assemble_tests
-    install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
-    install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
-    verify_installed_for_ai
-    set +e
-    instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
-      -e class com.unplugged.app.CpuBenchmarkTest \
-      "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
-    instrumentation_status=$?
-    set -e
-    printf '%s\n' "$instrumentation_output"
-    (( instrumentation_status == 0 )) || fail "Benchmark command failed with exit code $instrumentation_status."
-    grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "CPU benchmark reported test failures."
-    grep -q '^OK (' <<<"$instrumentation_output" || fail "CPU benchmark did not report a successful test summary."
-    grep -q 'cpu_benchmark=' <<<"$instrumentation_output" || fail "CPU benchmark metrics were not reported."
-    echo "[PASS] CPU benchmark completed only for $TARGET_USER_NAME user $USER_ID"
+    prepare_instrumentation
+    run_instrumentation "CPU benchmark" "com.unplugged.app.CpuBenchmarkTest" "cpu_benchmark="
     ;;
   gpu-benchmark)
     select_target
-    assemble_app
-    assemble_tests
-    install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
-    install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
-    verify_installed_for_ai
-    set +e
-    instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
-      -e class com.unplugged.app.GpuBenchmarkTest \
-      "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
-    instrumentation_status=$?
-    set -e
-    printf '%s\n' "$instrumentation_output"
-    (( instrumentation_status == 0 )) || fail "GPU benchmark command failed with exit code $instrumentation_status."
-    grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "GPU benchmark reported test failures."
-    grep -q '^OK (' <<<"$instrumentation_output" || fail "GPU benchmark did not report a successful test summary."
-    grep -q 'gpu_benchmark=' <<<"$instrumentation_output" || fail "GPU benchmark metrics were not reported."
-    echo "[PASS] GPU benchmark completed only for $TARGET_USER_NAME user $USER_ID"
+    prepare_instrumentation
+    run_instrumentation "GPU benchmark" "com.unplugged.app.GpuBenchmarkTest" "gpu_benchmark="
     ;;
   vision-benchmark)
     select_target
-    assemble_app
-    assemble_tests
-    install_apk "$ROOT/app/build/outputs/apk/debug/app-debug.apk"
-    install_apk "$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" true
-    verify_installed_for_ai
-    set +e
-    instrumentation_output=$("$ADB" -s "$SERIAL" shell am instrument --user "$USER_ID" -w -r \
-      -e class com.unplugged.app.VisionCpuBenchmarkTest,com.unplugged.app.VisionGpuBenchmarkTest \
-      "$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner" 2>&1)
-    instrumentation_status=$?
-    set -e
-    printf '%s\n' "$instrumentation_output"
-    (( instrumentation_status == 0 )) || fail "Vision benchmark command failed with exit code $instrumentation_status."
-    grep -q 'FAILURES!!!' <<<"$instrumentation_output" && fail "Vision benchmark reported test failures."
-    grep -q '^OK (' <<<"$instrumentation_output" || fail "Vision benchmark did not report a successful test summary."
-    grep -q 'vision_cpu_benchmark=' <<<"$instrumentation_output" || fail "CPU vision metrics were not reported."
-    grep -q 'vision_gpu_benchmark=' <<<"$instrumentation_output" || fail "GPU vision metrics were not reported."
-    echo "[PASS] CPU/GPU vision benchmark completed only for $TARGET_USER_NAME user $USER_ID"
+    prepare_instrumentation
+    run_instrumentation "CPU/GPU vision benchmark" \
+      "com.unplugged.app.VisionCpuBenchmarkTest,com.unplugged.app.VisionGpuBenchmarkTest" \
+      "vision_cpu_benchmark=" "vision_gpu_benchmark="
     ;;
   *)
     echo "Usage: $0 {install|launch|uninstall|e2e|benchmark|gpu-benchmark|vision-benchmark}" >&2

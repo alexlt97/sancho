@@ -41,5 +41,80 @@
         "repair": "Connect and authorize the Pixel 9a with USB debugging, then rerun make install."
       }
     ]
+  },
+  {
+    "id": "F002",
+    "behavior": "A typed tool contract validates names, arguments, risk levels, confirmation states, and bounded execution results.",
+    "verification": "make test",
+    "state": "planned",
+    "evidence": "planned V2 feature; implementation not started",
+    "layers": [
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Add deterministic tests for schemas, validation failures, risk classification, and confirmation transitions."
+      }
+    ]
+  },
+  {
+    "id": "F003",
+    "behavior": "Deterministic mock tools exercise unknown calls, malformed arguments, timeouts, cancellation, oversized output, and untrusted results.",
+    "verification": "make test",
+    "state": "planned",
+    "evidence": "planned V2 feature; implementation not started",
+    "layers": [
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Implement fake executors and test every bounded failure path without network access."
+      }
+    ]
+  },
+  {
+    "id": "F004",
+    "behavior": "Sancho parses structured tool calls, executes approved tools, resumes bounded streaming, caps tool turns, and preserves local chat when tools are disabled.",
+    "verification": "make test",
+    "state": "planned",
+    "evidence": "planned V2 feature; implementation not started",
+    "layers": [
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Add fake-LLM conversation tests for tool-call parsing, result insertion, resumption, cancellation, and disabled-tool fallback."
+      }
+    ]
+  },
+  {
+    "id": "F005",
+    "behavior": "Read-only native web tools provide controlled search and page fetching with HTTPS, host policy, bounded results, source labels, and visible network status.",
+    "verification": "make check",
+    "state": "planned",
+    "evidence": "planned V2 feature; implementation not started",
+    "layers": [
+      {
+        "label": "static",
+        "cmd": "make check",
+        "repair": "Record the network permission decision, add host-policy tests, and verify no tool bypasses the executor boundary."
+      },
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Use mocked HTTPS responses to test normalization, limits, source labels, retries, and untrusted content handling."
+      }
+    ]
+  },
+  {
+    "id": "F006",
+    "behavior": "V2 tool execution has redacted observability, explicit permission/settings behavior, offline fallback, and device/release verification.",
+    "verification": "make check",
+    "state": "planned",
+    "evidence": "planned V2 feature; implementation not started",
+    "layers": [
+      {
+        "label": "static",
+        "cmd": "make check",
+        "repair": "Add policy, privacy, release, and architecture checks before enabling optional tools."
+      }
+    ]
   }
 ]

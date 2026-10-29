@@ -1,10 +1,10 @@
-# AGENTS.md — Local AI Android
+# AGENTS.md — Sancho development contract
 
 ## Project goal
 
-This repository will become an offline-first Android chat application for a Pixel 9a running GrapheneOS. It uses Kotlin, Jetpack Compose, LiteRT-LM, and Gemma 4 E2B.
+This repository is an offline-first Android chat application for a Pixel 9a running GrapheneOS. It uses Kotlin, Jetpack Compose, LiteRT-LM, and Gemma 4 E2B.
 
-The first product milestone is reliable local multi-turn chat. Phone automation and tool calling are explicitly out of scope until chat is complete.
+V1 is reliable local multi-turn chat. V2 tool calling is planned in [docs/v2.md](docs/v2.md); V1 does not execute model-requested tools.
 
 ## Target and operating assumptions
 
@@ -12,6 +12,8 @@ The first product milestone is reliable local multi-turn chat. Phone automation 
 - Inference is local after model installation; normal chat must work without network access.
 - The app must not require Google Play Services or Google account access unless a later decision explicitly changes this.
 - Model binaries are user-provided or installed through an explicit setup flow; they are never downloaded automatically during tests.
+
+Why: the first milestone prioritizes privacy, local inference, and user control before granting device authority.
 
 ## Architecture boundaries
 
@@ -30,7 +32,7 @@ The first product milestone is reliable local multi-turn chat. Phone automation 
 1. Clock in: read `PROGRESS.md`, then run `make check` before touching code.
 2. Inspect existing code and tests before editing.
 3. Implement the smallest change that satisfies the active feature.
-4. Add or update tests for behavior changes.
+4. Add or update tests and documentation for behavior changes.
 5. Run the verification layers in order; do not proceed when an earlier layer fails.
 6. Review the final diff for unrelated changes and update documentation in the same commit as code.
 7. Clock out: update `PROGRESS.md`, run `make clean-check`, and commit one complete logical change.
@@ -50,7 +52,9 @@ Terminal workflow:
 - `make device` reports connected ADB devices.
 - `make instrumentation-build` compiles Android UI tests without a device.
 - `make e2e` runs Android UI tests and requires an emulator or connected device.
-- `make benchmark` measures CPU model loading and generation timing using the imported model on the AI profile.
+- `make benchmark`, `make gpu-benchmark`, and `make vision-benchmark` measure imported-model inference on the AI profile.
+- `make reports-analyze FILE=...` analyzes an exported report ZIP without network access.
+- `make check-arch`, `make vcr`, `make verify-feature F=<id>`, and `ALLOW_ACTIVE=1 make clean-check` enforce harness state.
 - Android Studio is not required for development or verification.
 
 - Layer 1 — static: Gradle compilation, unit tests, lint, formatting, and architecture checks.
@@ -70,25 +74,11 @@ If validation cannot run, report it as unverified rather than passed. Never skip
 - Do not require real model files for unit tests.
 - Do not assert exact natural-language output from an LLM.
 
-## Code quality
-
-- Follow Kotlin conventions.
-- Use ktlint, Detekt, and Android Lint when configured.
-- Prefer clear interfaces and small functions.
-- Avoid blocking the main thread.
-- Never suppress a warning without explaining why.
-- Do not disable or weaken existing tests to make checks pass.
-- Do not change project-wide formatting without authorization.
-
 ## Model integration
 
-- Use the official LiteRT-LM API and supported model bundles.
-- Confirm API signatures against documentation or installed sources; do not guess unsupported methods.
-- Treat real inference as a device integration test.
-- Close native resources deterministically.
-- Perform model loading and inference off the main thread.
-- Keep model binaries out of Git.
-- Never download multi-GB model files automatically during normal tests.
+- Use the official LiteRT-LM API and confirm signatures against documentation or installed sources.
+- Treat real inference as a device integration test; load off the main thread and close native resources deterministically.
+- Keep model binaries out of Git and never download multi-GB models during normal tests.
 
 ## Security and privacy
 
@@ -100,10 +90,12 @@ If validation cannot run, report it as unverified rather than passed. Never skip
 - Do not execute arbitrary shell commands or unrestricted tool calls from model output.
 - Every new error category found in review becomes a rule in `.harness/arch-rules.json`.
 
+Tool permissions and scoped capabilities are recorded in `.harness/tool-policy.json`.
+
 ## State and feature rules
 
 - Cross-session state lives in `PROGRESS.md`, `DECISIONS.md`, and `feature_list.json`.
-- Feature states are `planned → active → passing`; skipping states is not allowed.
+- Feature states are `not_started/planned → active → passing`; skipping states is not allowed.
 - Only one feature may be `active` at a time (WIP=1).
 - Never set a feature to `passing` directly; use `make verify-feature F=<id>`.
 - Each feature should be completable in one session. Split features that are larger.
@@ -116,9 +108,11 @@ If validation cannot run, report it as unverified rather than passed. Never skip
 - Commit messages must explain why the change was made, not only what changed.
 - If context is running low, do not rush to finish: update `PROGRESS.md` and leave a clean checkpoint.
 
+See [V1 scope](docs/v1.md), [V2 roadmap](docs/v2.md), and [V2 transport research](docs/v2-research.md) for topic detail.
+
 ## Observability and clean state
 
-- Use the sprint contract before starting a feature.
+- Use `templates/sprint-contract.md` before starting a feature.
 - Record verification events with `make session-start` and `make session-end`.
 - Score completed work with `templates/evaluator-rubric.md`.
 - At session end, run `make clean-check` and remove debug artifacts.
@@ -127,15 +121,7 @@ If validation cannot run, report it as unverified rather than passed. Never skip
 
 ## Definition of done
 
-A task is complete only when runtime evidence passes—not when code is merely written or the agent is confident:
-
-- Code compiles.
-- Relevant tests pass.
-- Lint and static analysis pass.
-- New behavior has appropriate tests.
-- Required device/e2e checks pass.
-- Documentation and state files are updated.
-- The applicable feature has evidence and is marked passing through the verification script.
+A task is complete only when code, relevant tests, lint, architecture checks, documentation, state, and required runtime evidence pass. If device/e2e verification cannot run, mark it unverified and do not claim completion.
 
 ## Final response
 
