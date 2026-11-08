@@ -2,6 +2,40 @@
 
 This document records options that are not part of the first V2 vertical slice. They remain research until the tool contract, policy, confirmation, and bounded-result model are stable.
 
+## Offline voice decision
+
+The first V2 voice path uses three separate providers:
+
+- [Moonshine Voice](https://github.com/moonshine-ai/moonshine) provides embedded offline speech-to-text through its Android `MicTranscriber`. Sancho imports local Tiny Streaming or Small Streaming model files (frontend, encoder, adapter, key/value decoder, config, and tokenizer) into separate private app-storage directories and calls `modelsFrom(...)`; it does not use Moonshine's optional downloader. Tiny remains the default, while Small is the first accuracy experiment.
+- Sancho's existing Gemma 4 E2B text path remains responsible for reasoning. This avoids making live conversation depend on Gemma audio latency.
+- Android TextToSpeech provides the spoken response using an installed offline voice. Sancho must check that the selected voice is available without network access.
+
+The widget starts a compact voice session rather than the main chat activity.
+Moonshine captures the microphone inside Sancho, so the FUTO recognition surface
+and FUTO app icon are no longer part of this path. Android's microphone privacy
+indicator remains expected and visible.
+
+Direct Gemma audio remains a later benchmark. Gemma 4 E2B supports audio ASR, but Sancho currently imports only .litertlm models and sends text/image content through LocalLlm. An audio-enabled LiteRT-LM bundle and a compatible Android content API must be verified on the Pixel 9a before this becomes an alternative provider.
+
+The first test uses Moonshine's tiny streaming architecture to prioritize Pixel
+latency and memory. The model folder must be prepared before going offline;
+Sancho never downloads it automatically. The official Android binding documents
+the `MicTranscriber` callbacks and local `modelsFrom` path in the [Moonshine
+transcription guide](https://github.com/moonshine-ai/moonshine/blob/main/docs/using/transcription.md).
+
+References: [Moonshine Android binding](https://github.com/moonshine-ai/moonshine/tree/main/language-bindings/android), [Gemma audio understanding](https://ai.google.dev/gemma/docs/capabilities/audio), [Gemma 4 model card](https://ai.google.dev/gemma/docs/core/model_card_4).
+
+## Moonshine AgentFlow comparison experiment
+
+Moonshine `AgentFlow` is a candidate runtime for bounded spoken workflows, not
+a direct replacement for Gemma's open-ended reasoning. It uses an embedding
+model to match trigger phrases and advances scripted `listenFor`, `ask`,
+`confirm`, and `choose` flows. The proposed comparison keeps Moonshine STT and
+Android TextToSpeech constant, then compares AgentFlow's scripted runtime with
+the existing Gemma Voice/Agent runtime on a mock note-confirmation task. The
+full protocol, metrics, offline asset requirements, and decision boundary are
+in [agentflow-experiment.md](agentflow-experiment.md).
+
 ## Native HTTPS tools — preferred first transport
 
 Small, explicit Android executors can provide `search_web(query)` and `fetch_web_page(url)`. This keeps the model local while only the selected tool uses the network. The executor owns HTTPS enforcement, host policy, redaction, byte/time limits, source labels, and confirmation behavior.

@@ -11,3 +11,5 @@ The project will evolve in small, reviewable steps. The first milestone is a rel
 See [Version 1 scope and development notes](docs/v1.md) for the current implementation details, terminal workflow, and known boundaries.
 
 See [Version 2 planning](docs/v2.md) for the future tool-calling, internet, terminal, SSH, and phone-action roadmap.
+
+The real-model role safety test is documented in [model harness testing](docs/model-harness-testing.md) and runs with `make harness-device-test` on the active AI profile.

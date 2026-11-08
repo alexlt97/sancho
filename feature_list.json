@@ -116,5 +116,52 @@
         "repair": "Add policy, privacy, release, and architecture checks before enabling optional tools."
       }
     ]
+  },
+  {
+    "id": "F007",
+    "behavior": "Offline voice input receives partial and final transcripts from an embedded Moonshine streaming model without network fallback; Tiny is the default and Small is an optional accuracy experiment.",
+    "verification": "make test",
+    "state": "planned",
+    "evidence": "embedded provider implemented with local model-folder validation; device accuracy and latency verification remain pending",
+    "layers": [
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Add fake recognition results and tests for transcript delivery, cancellation, provider failure, and offline-only policy."
+      }
+    ]
+  },
+  {
+    "id": "F008",
+    "behavior": "An offline voice session sends the transcript to local Gemma text inference and speaks the response through an installed Android TextToSpeech voice.",
+    "verification": "make test",
+    "state": "planned",
+    "evidence": "planned V2 voice feature; implementation not started; provider decision recorded in docs/v2.md",
+    "layers": [
+      {
+        "label": "runtime",
+        "cmd": "make test",
+        "repair": "Test listening, thinking, speaking, cancellation, model failure, TTS failure, and offline provider availability with fakes."
+      }
+    ]
+  },
+  {
+    "id": "F009",
+    "behavior": "A 1x1 home-screen Sancho widget and Quick Settings tile start the offline voice session, which sends the embedded Moonshine transcript through the imported local Gemma model and ends after the spoken response for the AI GrapheneOS profile.",
+    "verification": "make check && make e2e",
+    "state": "active",
+    "evidence": "1x1 widget, Quick Settings tile with monochrome Sancho mark, dedicated opaque voice activity, animated central sphere that stops active sessions or starts another prompt, secondary Exit-to-home action, short spoken stop commands before Gemma, embedded Moonshine Tiny/Small Streaming STT with separate local model-folder import, microphone permission, warm imported local Gemma response runtime, phase timing, and Android TextToSpeech integration implemented; Pixel 9a entry and Tiny timing are validated, while Small accuracy and a controlled comparison remain pending",
+    "layers": [
+      {
+        "label": "static",
+        "cmd": "make check",
+        "repair": "Add widget, manifest, permission, and architecture checks without granting network or unrestricted phone-action permissions."
+      },
+      {
+        "label": "device",
+        "cmd": "make e2e",
+        "repair": "Install and configure the Moonshine model, widget, and Quick Settings tile in the AI profile, then verify microphone permission, recognition, spoken transcript, privacy indicators, and no main-chat or FUTO surface on the Pixel 9a."
+      }
+    ]
   }
 ]
