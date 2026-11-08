@@ -35,3 +35,13 @@ class CancellableFakeLocalLlm : LocalLlm {
 
     override fun close() = Unit
 }
+
+class BurstLocalLlm : LocalLlm {
+    override suspend fun load(modelFile: File) = Unit
+
+    override fun stream(request: LlmRequest): Flow<String> = flow {
+        repeat(300) { emit("x") }
+    }
+
+    override fun close() = Unit
+}

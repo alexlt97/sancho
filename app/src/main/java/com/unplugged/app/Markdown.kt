@@ -9,6 +9,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -25,12 +28,23 @@ import androidx.compose.ui.unit.sp
 fun MarkdownText(
     markdown: String,
     modifier: Modifier = Modifier,
+    onParseTimeMillis: ((Long) -> Unit)? = null,
 ) {
+    val parsed = remember(markdown) {
+        val startedAtNanos = System.nanoTime()
+        ParsedMarkdown(
+            blocks = parseMarkdownBlocks(markdown),
+            parseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L,
+        )
+    }
+    LaunchedEffect(markdown, parsed.parseTimeMillis, onParseTimeMillis != null) {
+        onParseTimeMillis?.invoke(parsed.parseTimeMillis)
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        parseMarkdownBlocks(markdown).forEach { block ->
+        parsed.blocks.forEach { block ->
             when (block) {
                 is MarkdownBlock.Text -> Text(block.value.toMarkdownAnnotatedString())
                 is MarkdownBlock.Table -> MarkdownTable(block)
@@ -38,6 +52,11 @@ fun MarkdownText(
         }
     }
 }
+
+private data class ParsedMarkdown(
+    val blocks: List<MarkdownBlock>,
+    val parseTimeMillis: Long,
+)
 
 internal sealed interface MarkdownBlock {
     data class Text(val value: String) : MarkdownBlock

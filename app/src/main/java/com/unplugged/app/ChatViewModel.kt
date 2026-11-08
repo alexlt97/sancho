@@ -14,12 +14,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 data class ChatMessage(
     val author: String,
     val text: String,
     val imageAttachment: ImageAttachment? = null,
     val timeToFirstTokenMillis: Long? = null,
+    val isStreaming: Boolean = false,
+    val totalResponseTimeMillis: Long? = null,
+    val markdownParseTimeMillis: Long? = null,
+    val timeToFirstDisplayMillis: Long? = null,
+    val displayUpdateCount: Int = 0,
+    val responseStartedAtNanos: Long? = null,
 )
 
 data class ChatUiState(
@@ -32,6 +39,9 @@ data class ChatUiState(
     val isGenerating: Boolean = false,
     val imageAttachment: ImageAttachment? = null,
 )
+
+private const val STREAM_UI_UPDATE_INTERVAL_MILLIS = 50L
+private const val STREAM_UI_UPDATE_MIN_CHARS = 96
 
 class ChatViewModel(
     private val modelImporter: ModelImporter? = null,
@@ -110,30 +120,67 @@ class ChatViewModel(
             )
             val startedAtNanos = System.nanoTime()
             var timeToFirstTokenMillis: Long? = null
+            var totalResponseTimeMillis: Long? = null
+            var lastUiUpdateNanos = startedAtNanos
+            var publishedResponseLength = 0
+            val responseText = StringBuilder()
+
+            fun publishResponse(streaming: Boolean) {
+                if (responseText.isEmpty() ||
+                    (streaming && responseText.length == publishedResponseLength)
+                ) {
+                    return
+                }
+
+                val messages = _uiState.value.messages
+                val last = messages.lastOrNull()
+                val response = responseText.toString()
+                val updatedMessages = if (last?.author == "Assistant") {
+                    messages.dropLast(1) + last.copy(
+                        text = response,
+                        timeToFirstTokenMillis = last.timeToFirstTokenMillis ?: timeToFirstTokenMillis,
+                        isStreaming = streaming,
+                        totalResponseTimeMillis = last.totalResponseTimeMillis ?: totalResponseTimeMillis,
+                        responseStartedAtNanos = last.responseStartedAtNanos ?: startedAtNanos,
+                    )
+                } else {
+                    messages + ChatMessage(
+                        author = "Assistant",
+                        text = response,
+                        timeToFirstTokenMillis = timeToFirstTokenMillis,
+                        isStreaming = streaming,
+                        totalResponseTimeMillis = totalResponseTimeMillis,
+                        responseStartedAtNanos = startedAtNanos,
+                    )
+                }
+                _uiState.value = _uiState.value.copy(messages = updatedMessages)
+                publishedResponseLength = responseText.length
+                lastUiUpdateNanos = System.nanoTime()
+            }
+
             try {
                 llm.stream(LlmRequest(prompt = prompt, imageFile = imageAttachment?.file)).collect { chunk ->
-                    val firstTokenMillis = if (timeToFirstTokenMillis == null && chunk.isNotEmpty()) {
+                    if (chunk.isEmpty()) return@collect
+                    val firstTokenMillis = if (timeToFirstTokenMillis == null) {
                         (System.nanoTime() - startedAtNanos) / 1_000_000L
                     } else {
                         null
                     }
                     timeToFirstTokenMillis = timeToFirstTokenMillis ?: firstTokenMillis
-                    val messages = _uiState.value.messages
-                    val last = messages.lastOrNull()
-                    val updatedMessages = if (last?.author == "Assistant") {
-                        messages.dropLast(1) + last.copy(
-                            text = last.text + chunk,
-                            timeToFirstTokenMillis = last.timeToFirstTokenMillis ?: firstTokenMillis,
-                        )
-                    } else {
-                        messages + ChatMessage(
-                            author = "Assistant",
-                            text = chunk,
-                            timeToFirstTokenMillis = firstTokenMillis,
-                        )
+                    responseText.append(chunk)
+
+                    val elapsedSinceUpdateMillis =
+                        (System.nanoTime() - lastUiUpdateNanos) / 1_000_000L
+                    if (publishedResponseLength == 0 ||
+                        responseText.length - publishedResponseLength >= STREAM_UI_UPDATE_MIN_CHARS ||
+                        elapsedSinceUpdateMillis >= STREAM_UI_UPDATE_INTERVAL_MILLIS
+                    ) {
+                        publishResponse(streaming = true)
+                        yield()
                     }
-                    _uiState.value = _uiState.value.copy(messages = updatedMessages)
                 }
+                totalResponseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                publishResponse(streaming = false)
                 currentCoroutineContext().ensureActive()
                 val state = _uiState.value
                 val lastMessage = state.messages.lastOrNull()
@@ -147,8 +194,12 @@ class ChatViewModel(
                     state.copy(status = "Local model ready.")
                 }
             } catch (_: CancellationException) {
+                totalResponseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                publishResponse(streaming = false)
                 _uiState.value = _uiState.value.copy(status = "Generation stopped.")
             } catch (error: Exception) {
+                totalResponseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                publishResponse(streaming = false)
                 _uiState.value = _uiState.value.copy(
                     status = "Local inference failed: ${error.message ?: "unknown error"}",
                 )
@@ -163,6 +214,39 @@ class ChatViewModel(
         if (!_uiState.value.isGenerating) return
         _uiState.value = _uiState.value.copy(status = "Stopping…")
         generationJob?.cancel()
+    }
+
+    fun recordMarkdownParseTime(responseText: String, elapsedMillis: Long) {
+        val state = _uiState.value
+        val index = state.messages.indexOfLast { message ->
+            message.author == "Assistant" && message.text == responseText
+        }
+        if (index == -1 || state.messages[index].markdownParseTimeMillis == elapsedMillis) {
+            return
+        }
+
+        val messages = state.messages.toMutableList()
+        messages[index] = messages[index].copy(markdownParseTimeMillis = elapsedMillis)
+        _uiState.value = state.copy(messages = messages)
+    }
+
+    fun recordAssistantDisplayed(responseText: String, frameTimeNanos: Long) {
+        val state = _uiState.value
+        val index = state.messages.indexOfLast { message ->
+            message.author == "Assistant" && message.text == responseText && message.isStreaming
+        }
+        if (index == -1) return
+
+        val message = state.messages[index]
+        val startedAtNanos = message.responseStartedAtNanos ?: return
+        val displayTimeMillis =
+            ((frameTimeNanos - startedAtNanos) / 1_000_000L).coerceAtLeast(0L)
+        val messages = state.messages.toMutableList()
+        messages[index] = message.copy(
+            timeToFirstDisplayMillis = message.timeToFirstDisplayMillis ?: displayTimeMillis,
+            displayUpdateCount = message.displayUpdateCount + 1,
+        )
+        _uiState.value = state.copy(messages = messages)
     }
 
     fun importModel(uri: Uri) {

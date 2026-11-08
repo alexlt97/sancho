@@ -6,7 +6,10 @@ import org.junit.Test
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -58,6 +61,7 @@ class ChatViewModelTest {
                 viewModel.uiState.value.messages.last().let { "${it.author}: ${it.text}" },
             )
             assertTrue(viewModel.uiState.value.messages.last().timeToFirstTokenMillis != null)
+            assertTrue(!viewModel.uiState.value.messages.last().isStreaming)
         } finally {
             Dispatchers.resetMain()
         }
@@ -84,6 +88,7 @@ class ChatViewModelTest {
             assertEquals("Assistant", assistant.author)
             assertTrue(assistant.text.contains("Mock response"))
             assertTrue(assistant.timeToFirstTokenMillis != null)
+            assertTrue(!assistant.isStreaming)
         } finally {
             Dispatchers.resetMain()
         }
@@ -112,6 +117,36 @@ class ChatViewModelTest {
             assertTrue(!viewModel.uiState.value.isGenerating)
             assertEquals("Generation stopped.", viewModel.uiState.value.status)
             assertEquals("Partial response", viewModel.uiState.value.messages.last().text)
+            assertTrue(!viewModel.uiState.value.messages.last().isStreaming)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun longStreamDoesNotPublishEveryChunkToTheUi() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val viewModel = ChatViewModel(localLlm = BurstLocalLlm())
+            val observedStates = mutableListOf<ChatUiState>()
+            val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect { observedStates += it }
+            }
+
+            viewModel.loadModel(ImportedModel("fake.litertlm", 1L, File("fake.litertlm")))
+            advanceUntilIdle()
+            viewModel.updateDraft("long prompt")
+            viewModel.send()
+            advanceUntilIdle()
+
+            val assistantStates = observedStates.mapNotNull { state ->
+                state.messages.lastOrNull()?.takeIf { it.author == "Assistant" }
+            }
+            assertEquals(300, viewModel.uiState.value.messages.last().text.length)
+            assertTrue(assistantStates.size < 20)
+            assertTrue(!assistantStates.last().isStreaming)
+            observer.cancel()
         } finally {
             Dispatchers.resetMain()
         }

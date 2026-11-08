@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,12 +38,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -50,6 +55,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
@@ -107,6 +113,16 @@ private val StatusUnavailableRed = Color(0xFFFF7B72)
 private val UserMessageBackground = Color(0xFF173B2D).copy(alpha = 0.72f)
 private val AssistantMessageBackground = Color(0xFF211A35).copy(alpha = 0.78f)
 
+private enum class SettingsSection(
+    val title: String,
+    val summary: String,
+) {
+    MODELS("Models", "Import and manage local models"),
+    VOICE("Voice settings", "Widget, Quick Settings, and speech"),
+    REPORTS("Reports", "Review and export issue reports"),
+    CHAT("Chat settings", "Appearance, metrics, and generation"),
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,11 +141,14 @@ class MainActivity : ComponentActivity() {
                             modelsDirectory = File(context.filesDir, "models"),
                         )
                     }
+                    val chatHarness = remember(context) {
+                        context.sanchoModelHarness(HarnessRole.CHAT_VISION)
+                    }
                     val localLlm = remember(context) {
                         if (BuildConfig.MOCK_PREVIEW) {
                             MockLocalLlm()
                         } else {
-                            LiteRtLocalLlm(context.cacheDir)
+                            LiteRtLocalLlm(context.cacheDir, harness = chatHarness)
                         }
                     }
                     GalaxyBackdrop {
@@ -147,21 +166,56 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ColumnScope.SettingsPanel(
-    state: ChatUiState,
-    onImportModel: () -> Unit,
-    reportCount: Int,
-    onOpenReports: () -> Unit,
+    onOpenSection: (SettingsSection) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .weight(1f),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "Local model",
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        SettingsSection.entries.forEach { section ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSection(section) }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(section.title, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            section.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(">", color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ModelsSettingsPanel(
+    state: ChatUiState,
+    onImportModel: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
@@ -202,16 +256,6 @@ private fun ColumnScope.SettingsPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Button(
-                    onClick = onOpenReports,
-                    enabled = !state.isImportingModel && !state.isGenerating,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary,
-                    ),
-                ) {
-                    Text("Reports ($reportCount)")
-                }
             }
         }
         Text(
@@ -219,6 +263,156 @@ private fun ColumnScope.SettingsPanel(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun ColumnScope.VoiceSettingsPanel(
+    selectedVariant: MoonshineModelVariant,
+    installed: Boolean,
+    moonshineModelMessage: String?,
+    onVariantChange: (MoonshineModelVariant) -> Unit,
+    onImportMoonshineModel: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 4.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Voice entry points", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "The Sancho widget and Quick Settings tile use Moonshine, local Gemma, and Android TextToSpeech.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text("Speech model", style = MaterialTheme.typography.titleSmall)
+                MoonshineModelVariant.entries.forEach { variant ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onVariantChange(variant) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = selectedVariant == variant,
+                            onClick = { onVariantChange(variant) },
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(variant.displayName)
+                            Text(
+                                variant.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    if (installed) {
+                        "${selectedVariant.displayName} is installed and stays on this device."
+                    } else {
+                        "Import the selected model folder before using voice mode."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onImportMoonshineModel,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ActionGreen,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Text(if (installed) "Replace ${selectedVariant.displayName}" else "Import ${selectedVariant.displayName}")
+                }
+                moonshineModelMessage?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    "Choose the folder containing the selected Moonshine .ort files, streaming_config.json, and tokenizer.bin.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ChatSettingsPanel(
+    metricsEnabled: Boolean,
+    onMetricsEnabledChange: (Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 4.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Conversation behavior", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Choose which local response timing details appear below assistant messages.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show response metrics")
+                        Text(
+                            "TTFT, first shown text, total time, and parse time",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = metricsEnabled,
+                        onCheckedChange = onMetricsEnabledChange,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamingAssistantText(
+    text: String,
+    onDisplayed: ((String, Long) -> Unit)?,
+) {
+    Text(text)
+    if (onDisplayed != null) {
+        LaunchedEffect(text) {
+            withFrameNanos { frameTimeNanos ->
+                onDisplayed(text, frameTimeNanos)
+            }
+        }
     }
 }
 
@@ -472,6 +666,10 @@ private fun SanchoChat(
     )
     val state by chatViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val chatSettings = remember(context) { ChatSettingsStore(context) }
+    var metricsEnabled by remember(chatSettings) {
+        mutableStateOf(chatSettings.metricsEnabled())
+    }
     val reportStore = remember(context) {
         ReportStore(
             contentResolver = context.contentResolver,
@@ -488,6 +686,7 @@ private fun SanchoChat(
     val scope = rememberCoroutineScope()
     var showSettings by remember { mutableStateOf(false) }
     var showReports by remember { mutableStateOf(false) }
+    var settingsSection by remember { mutableStateOf<SettingsSection?>(null) }
     var editingReportId by remember { mutableStateOf<String?>(null) }
     var screenshotReportId by remember { mutableStateOf<String?>(null) }
     val messageListState = rememberLazyListState()
@@ -516,6 +715,36 @@ private fun SanchoChat(
     val modelPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri -> uri?.let(chatViewModel::importModel) },
+    )
+    val moonshineModelImporter = remember(context) {
+        MoonshineModelImporter(
+            context = context,
+            contentResolver = context.contentResolver,
+            modelsRoot = File(context.filesDir, "moonshine"),
+        )
+    }
+    val moonshineSettings = remember(context) { MoonshineSettingsStore(context) }
+    var moonshineVariant by remember(moonshineSettings) {
+        mutableStateOf(moonshineSettings.selectedVariant())
+    }
+    var moonshineModelInstalled by remember(moonshineModelImporter, moonshineVariant) {
+        mutableStateOf(moonshineModelImporter.isInstalled(moonshineVariant))
+    }
+    var moonshineModelMessage by remember { mutableStateOf<String?>(null) }
+    val moonshineModelPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+        onResult = { uri ->
+            if (uri != null) {
+                scope.launch {
+                    moonshineModelImporter.importDirectory(uri, moonshineVariant).onSuccess {
+                        moonshineModelInstalled = true
+                        moonshineModelMessage = "Moonshine model imported."
+                    }.onFailure { error ->
+                        moonshineModelMessage = error.message ?: "Moonshine model import failed."
+                    }
+                }
+            }
+        },
     )
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -580,6 +809,9 @@ private fun SanchoChat(
                     onClick = {
                         if (showReports) {
                             showReports = false
+                            settingsSection = null
+                        } else if (settingsSection != null) {
+                            settingsSection = null
                         } else {
                             showSettings = false
                         }
@@ -587,11 +819,15 @@ private fun SanchoChat(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_back_24),
-                        contentDescription = "Back to chat",
+                        contentDescription = "Back",
                     )
                 }
                 Text(
-                    text = if (showReports) "Reports" else "Settings",
+                    text = when {
+                        showReports -> "Reports"
+                        settingsSection != null -> settingsSection!!.title
+                        else -> "Settings"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                 )
             } else {
@@ -603,6 +839,7 @@ private fun SanchoChat(
                     onClick = {
                         showSettings = true
                         showReports = false
+                        settingsSection = null
                     },
                 ) {
                     Icon(
@@ -636,15 +873,40 @@ private fun SanchoChat(
                 onExport = { reportExportPicker.launch("sancho_report.zip") },
             )
         } else if (showSettings) {
-            SettingsPanel(
-                state = state,
-                onImportModel = { modelPicker.launch(arrayOf("*/*")) },
-                reportCount = reportState.reports.size,
-                onOpenReports = {
-                    showReports = true
-                    editingReportId = null
-                },
-            )
+            when (settingsSection) {
+                null -> SettingsPanel(
+                    onOpenSection = { section ->
+                        if (section == SettingsSection.REPORTS) {
+                            showReports = true
+                            editingReportId = null
+                        } else {
+                            settingsSection = section
+                        }
+                    },
+                )
+                SettingsSection.MODELS -> ModelsSettingsPanel(
+                    state = state,
+                    onImportModel = { modelPicker.launch(arrayOf("*/*")) },
+                )
+                SettingsSection.VOICE -> VoiceSettingsPanel(
+                    selectedVariant = moonshineVariant,
+                    installed = moonshineModelInstalled,
+                    moonshineModelMessage = moonshineModelMessage,
+                    onVariantChange = { variant ->
+                        moonshineVariant = variant
+                        moonshineSettings.setSelectedVariant(variant)
+                    },
+                    onImportMoonshineModel = { moonshineModelPicker.launch(null) },
+                )
+                SettingsSection.CHAT -> ChatSettingsPanel(
+                    metricsEnabled = metricsEnabled,
+                    onMetricsEnabledChange = { enabled ->
+                        metricsEnabled = enabled
+                        chatSettings.setMetricsEnabled(enabled)
+                    },
+                )
+                SettingsSection.REPORTS -> Unit
+            }
         } else {
             HorizontalDivider(
                 modifier = Modifier.offset(y = (-4).dp),
@@ -713,15 +975,62 @@ private fun SanchoChat(
                                 GalaxyColors.secondary
                             },
                         )
-                        message.timeToFirstTokenMillis?.let { elapsedMillis ->
-                            Text(
-                                text = "TTFT: ${formatResponseTime(elapsedMillis)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        if (metricsEnabled && message.author == "Assistant") {
+                            val responseMetrics = buildList {
+                                message.timeToFirstTokenMillis?.let { elapsedMillis ->
+                                    add("TTFT ${formatResponseTime(elapsedMillis)}")
+                                }
+                                message.totalResponseTimeMillis?.let { elapsedMillis ->
+                                    add("Total ${formatResponseTime(elapsedMillis)}")
+                                }
+                                message.timeToFirstDisplayMillis?.let { elapsedMillis ->
+                                    add("Shown ${formatResponseTime(elapsedMillis)}")
+                                }
+                                if (message.displayUpdateCount > 0) {
+                                    add("UI ${message.displayUpdateCount}")
+                                }
+                                message.markdownParseTimeMillis?.let { elapsedMillis ->
+                                    add("Parse ${formatResponseTime(elapsedMillis)}")
+                                }
+                            }.joinToString(" · ")
+                            if (responseMetrics.isNotEmpty()) {
+                                Text(
+                                    text = responseMetrics,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         if (message.author == "Assistant") {
-                            MarkdownText(message.text)
+                            if (message.isStreaming) {
+                                StreamingAssistantText(
+                                    text = message.text,
+                                    onDisplayed = if (metricsEnabled) {
+                                        { displayedText, frameTimeNanos ->
+                                            chatViewModel.recordAssistantDisplayed(
+                                                displayedText,
+                                                frameTimeNanos,
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            } else {
+                                MarkdownText(
+                                    markdown = message.text,
+                                    onParseTimeMillis = if (metricsEnabled) {
+                                        { elapsedMillis ->
+                                            chatViewModel.recordMarkdownParseTime(
+                                                message.text,
+                                                elapsedMillis,
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
                         } else {
                             message.imageAttachment?.let { attachment ->
                                 ImageThumbnail(

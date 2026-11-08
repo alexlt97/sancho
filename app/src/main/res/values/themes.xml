@@ -6,4 +6,10 @@
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <style name="Theme.Sancho.VoiceSession" parent="Theme.Sancho">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">#090711</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

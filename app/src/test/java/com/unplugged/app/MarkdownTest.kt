@@ -122,6 +122,32 @@ class MarkdownTest {
     }
 
     @Test
+    fun formatsLongMixedResponseWithoutLeavingLatexCommands() {
+        val response = buildString {
+            repeat(24) {
+                appendLine("## Fourier step $it")
+                appendLine("For ${'$'}f(x)${'$'}, use the transform below:")
+                appendLine("${'$'}${'$'}")
+                appendLine("\\hat{f}(\\omega) = \\int_{-\\infty}^{\\infty} f(x)e^{-2\\pi i x \\omega}\\,dx")
+                appendLine("\\begin{bmatrix} \\boldsymbol{a} & b \\\\ c & d \\end{bmatrix}")
+                appendLine("${'$'}${'$'}")
+                appendLine("| Term | Value |")
+                appendLine("| --- | --- |")
+                appendLine("| ${'$'}a_${it}${'$'} | **stable** |")
+            }
+        }
+
+        val blocks = parseMarkdownBlocks(response)
+        val rendered = response.toMarkdownAnnotatedString()
+
+        assertTrue(blocks.count { it is MarkdownBlock.Table } >= 24)
+        assertTrue(rendered.text.contains("f̂(ω)"))
+        assertTrue(rendered.text.contains("∫"))
+        assertTrue(rendered.text.contains("stable"))
+        assertTrue(rendered.text.none { it == '\\' })
+    }
+
+    @Test
     fun parsesMarkdownTablesAsBlocks() {
         val blocks = parseMarkdownBlocks(
             "| A | B |\n| --- | --- |\n| 1 | 2 |",

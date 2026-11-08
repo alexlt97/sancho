@@ -37,9 +37,11 @@ class MainActivityComposerTest {
         composeRule.onNodeWithContentDescription("Open settings").performClick()
 
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Local model").assertIsDisplayed()
+        composeRule.onNodeWithText("Models").assertIsDisplayed()
+        composeRule.onNodeWithText("Models").performClick()
         composeRule.onNodeWithText("Import model").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Back to chat").performClick()
+        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.onNodeWithContentDescription("Open settings").assertIsDisplayed()
     }
 }

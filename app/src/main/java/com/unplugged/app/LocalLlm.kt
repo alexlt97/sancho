@@ -3,6 +3,7 @@ package com.unplugged.app
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
@@ -32,6 +33,7 @@ interface LocalLlm {
 class LiteRtLocalLlm(
     private val cacheDirectory: File,
     private val backend: Backend = Backend.CPU(),
+    private val harness: ModelHarness? = ModelHarnessFactory.defaultChatVision(),
 ) : LocalLlm {
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "sancho-litert-lm")
@@ -59,7 +61,12 @@ class LiteRtLocalLlm(
 
         try {
             candidate.initialize()
-            val candidateConversation = candidate.createConversation()
+            val conversationConfig = harness?.let { configuredHarness ->
+                ConversationConfig(
+                    systemInstruction = Contents.of(configuredHarness.systemInstruction),
+                )
+            } ?: ConversationConfig()
+            val candidateConversation = candidate.createConversation(conversationConfig)
             engine = candidate
             conversation = candidateConversation
         } catch (error: Throwable) {
