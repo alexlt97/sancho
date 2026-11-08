@@ -1,4 +1,4 @@
-.PHONY: setup build safety instrumentation-build install launch uninstall test check dev preview preview-stop e2e benchmark gpu-benchmark vision-benchmark device reports-analyze check-arch vcr verify-feature session-start session-end clean-check
+.PHONY: setup build safety instrumentation-build install launch uninstall screenshot voice-log test check dev preview preview-stop voice-preview e2e harness-device-test benchmark gpu-benchmark vision-benchmark harness-comparison long-plain-text-benchmark device reports-analyze check-arch vcr verify-feature session-start session-end clean-check
 
 setup:
 	@bash scripts/bootstrap-toolchain.sh
@@ -21,6 +21,12 @@ launch:
 uninstall:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh uninstall
 
+screenshot:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh screenshot "$(OUT)"
+
+voice-log:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh voice-log
+
 check:
 	@bash scripts/check.sh
 
@@ -36,8 +42,14 @@ preview:
 preview-stop:
 	@bash scripts/with-toolchain.sh bash scripts/preview.sh stop
 
+voice-preview:
+	@bash scripts/voice-preview.sh
+
 e2e:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh e2e
+
+harness-device-test:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh harness-test
 
 benchmark:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh benchmark
@@ -47,6 +59,12 @@ gpu-benchmark:
 
 vision-benchmark:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh vision-benchmark
+
+harness-comparison:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh harness-comparison
+
+long-plain-text-benchmark:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh long-plain-text-benchmark
 
 device:
 	@bash scripts/with-toolchain.sh adb devices -l

@@ -55,12 +55,22 @@ else
 fi
 
 # AndroidX may generate this app-private permission for non-exported receivers.
-# No platform, network, phone, sensor, or storage permissions are allowed here.
-UNEXPECTED="$(grep '^uses-permission:' <<<"$PERMISSIONS" | grep -v -F "${PACKAGE_NAME}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" || true)"
+# RECORD_AUDIO is the one explicit capability required by embedded Moonshine STT.
+# No network, phone, or storage permissions are allowed here.
+UNEXPECTED="$(grep '^uses-permission:' <<<"$PERMISSIONS" \
+  | grep -v -F "${PACKAGE_NAME}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" \
+  | grep -v -F "android.permission.RECORD_AUDIO" || true)"
 if [[ -n "$UNEXPECTED" ]]; then
   echo "[FAIL] APK declares unexpected permissions:" >&2
   echo "$UNEXPECTED" >&2
   exit 1
 fi
 
-echo "[PASS] APK declares no permissions outside its app-private AndroidX permission"
+if grep -Fq "uses-permission: name='android.permission.RECORD_AUDIO'" <<<"$PERMISSIONS"; then
+  echo "[PASS] APK microphone permission is limited to the embedded Moonshine voice feature"
+else
+  echo "[FAIL] APK does not declare the microphone permission required by Moonshine voice" >&2
+  exit 1
+fi
+
+echo "[PASS] APK declares no permissions outside microphone and its app-private AndroidX permission"

@@ -49,9 +49,11 @@ Terminal workflow:
 - `make test` runs JVM tests.
 - `make install` installs the debug APK through ADB.
 - `make launch` starts the installed app through ADB.
+- `make voice-preview` serves a dependency-free Pixel-shaped browser preview of the mocked Chat, Settings, Reports, widget, tile, and voice-session states without an emulator or device.
 - `make device` reports connected ADB devices.
 - `make instrumentation-build` compiles Android UI tests without a device.
 - `make e2e` runs Android UI tests and requires an emulator or connected device.
+- `make harness-device-test` runs adversarial Chat/Vision and Voice/Agent prompts against the imported real model on the active AI-profile Pixel 9a.
 - `make benchmark`, `make gpu-benchmark`, and `make vision-benchmark` measure imported-model inference on the AI profile.
 - `make reports-analyze FILE=...` analyzes an exported report ZIP without network access.
 - `make check-arch`, `make vcr`, `make verify-feature F=<id>`, and `ALLOW_ACTIVE=1 make clean-check` enforce harness state.
@@ -79,6 +81,8 @@ If validation cannot run, report it as unverified rather than passed. Never skip
 - Use the official LiteRT-LM API and confirm signatures against documentation or installed sources.
 - Treat real inference as a device integration test; load off the main thread and close native resources deterministically.
 - Keep model binaries out of Git and never download multi-GB models during normal tests.
+- Keep model-facing behavior in versioned `app/src/main/assets/prompts/` role profiles, loaded through `ConversationConfig.systemInstruction`; `AGENTS.md` remains a developer contract and is never injected into model prompts.
+- Keep role capabilities explicit: Chat/Vision may receive text and images; Voice/Agent is speech-friendly and tool-free until a separate tool contract and executor are verified.
 
 ## Security and privacy
 

@@ -13,6 +13,21 @@ require_file PROGRESS.md
 require_file DECISIONS.md
 require_file feature_list.json
 require_file Makefile
+require_file docs/voice-preview.md
+require_file scripts/voice-preview.sh
+require_file tools/voice-preview/index.html
+require_file app/src/main/assets/prompts/common.md
+require_file app/src/main/assets/prompts/chat_vision.md
+require_file app/src/main/assets/prompts/voice_agent.md
+require_file app/src/androidTest/java/com/unplugged/app/ModelHarnessDeviceTest.kt
+require_file app/src/androidTest/java/com/unplugged/app/HarnessComparisonBenchmarkTest.kt
+require_file app/src/androidTest/java/com/unplugged/app/LongPlainTextBenchmarkTest.kt
+require_file docs/model-harness-testing.md
+require_file docs/voice-testing.md
+require_file app/src/main/java/com/unplugged/app/VoiceEntryPoint.kt
+
+bash -n scripts/voice-preview.sh
+echo "[PASS] voice preview script syntax"
 
 python3 - feature_list.json <<'PY'
 import json

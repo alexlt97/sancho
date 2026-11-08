@@ -128,10 +128,32 @@ case "${1:-}" in
     "$ADB" -s "$SERIAL" uninstall --user "$USER_ID" "$APP_PACKAGE"
     echo "[PASS] Removed app packages only for $TARGET_USER_NAME user $USER_ID"
     ;;
+  screenshot)
+    select_target
+    output_path="${2:-${SCREENSHOT_PATH:-/tmp/sancho-screen.png}}"
+    if [[ -z "$output_path" ]]; then
+      output_path="${SCREENSHOT_PATH:-/tmp/sancho-screen.png}"
+    fi
+    output_directory="$(dirname "$output_path")"
+    mkdir -p "$output_directory"
+    "$ADB" -s "$SERIAL" exec-out screencap -p > "$output_path"
+    [[ -s "$output_path" ]] || fail "ADB returned an empty screenshot."
+    bytes="$(wc -c < "$output_path" | tr -d '[:space:]')"
+    echo "[PASS] Screenshot saved to $output_path ($bytes bytes) for $TARGET_USER_NAME user $USER_ID"
+    ;;
+  voice-log)
+    select_target
+    "$ADB" -s "$SERIAL" logcat -d -v brief -s SanchoVoice:I '*:S'
+    ;;
   e2e)
     select_target
     prepare_instrumentation
     run_instrumentation "Instrumentation" "com.unplugged.app.MainActivityTest,com.unplugged.app.MainActivityComposerTest"
+    ;;
+  harness-test)
+    select_target
+    prepare_instrumentation
+    run_instrumentation "Model harness safety" "com.unplugged.app.ModelHarnessDeviceTest" "harness_passed="
     ;;
   benchmark)
     select_target
@@ -150,8 +172,22 @@ case "${1:-}" in
       "com.unplugged.app.VisionCpuBenchmarkTest,com.unplugged.app.VisionGpuBenchmarkTest" \
       "vision_cpu_benchmark=" "vision_gpu_benchmark="
     ;;
+  harness-comparison)
+    select_target
+    prepare_instrumentation
+    run_instrumentation "Chat harness comparison" \
+      "com.unplugged.app.HarnessComparisonBenchmarkTest" \
+      "harness_comparison_harness=" "harness_comparison_no_harness="
+    ;;
+  long-plain-text-benchmark)
+    select_target
+    prepare_instrumentation
+    run_instrumentation "Long plain-text benchmark" \
+      "com.unplugged.app.LongPlainTextBenchmarkTest" \
+      "long_plain_text_benchmark="
+    ;;
   *)
-    echo "Usage: $0 {install|launch|uninstall|e2e|benchmark|gpu-benchmark|vision-benchmark}" >&2
+    echo "Usage: $0 {install|launch|uninstall|screenshot|voice-log|e2e|harness-test|benchmark|gpu-benchmark|vision-benchmark|harness-comparison|long-plain-text-benchmark}" >&2
     exit 2
     ;;
 esac
