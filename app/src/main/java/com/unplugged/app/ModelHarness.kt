@@ -35,17 +35,33 @@ fun interface PromptLoader {
 
 object ModelHarnessFactory {
     private const val COMMON_PROMPT = "prompts/common.md"
+    private const val CHAT_WEB_TOOLS_PROMPT = "prompts/chat_web_tools.md"
 
     fun create(role: HarnessRole, promptLoader: PromptLoader): ModelHarness {
-        val systemInstruction = listOf(
-            promptLoader.load(COMMON_PROMPT),
-            promptLoader.load(role.promptAsset),
-        ).joinToString(separator = "\n\n") { it.trim() }
+        return create(role, promptLoader, toolsEnabled = false)
+    }
+
+    fun create(
+        role: HarnessRole,
+        promptLoader: PromptLoader,
+        toolsEnabled: Boolean,
+    ): ModelHarness {
+        require(!toolsEnabled || role == HarnessRole.CHAT_VISION) {
+            "Only Chat/Vision can enable the browser-search tool."
+        }
+        val promptAssets = buildList {
+            add(COMMON_PROMPT)
+            add(role.promptAsset)
+            if (toolsEnabled) add(CHAT_WEB_TOOLS_PROMPT)
+        }
+        val systemInstruction = promptAssets.map { path ->
+            promptLoader.load(path)
+        }.joinToString(separator = "\n\n") { it.trim() }
 
         val capabilities = when (role) {
             HarnessRole.CHAT_VISION -> setOf(HarnessCapability.TEXT, HarnessCapability.IMAGE)
             HarnessRole.VOICE_AGENT -> setOf(HarnessCapability.TEXT)
-        }
+        } + if (toolsEnabled) setOf(HarnessCapability.TOOLS) else emptySet()
 
         return ModelHarness(
             role = role,
