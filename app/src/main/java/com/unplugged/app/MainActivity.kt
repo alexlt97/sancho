@@ -71,6 +71,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
@@ -113,6 +115,12 @@ private val StatusUnavailableRed = Color(0xFFFF7B72)
 private val UserMessageBackground = Color(0xFF173B2D).copy(alpha = 0.72f)
 private val AssistantMessageBackground = Color(0xFF211A35).copy(alpha = 0.78f)
 
+private data class BraveApiTestUiState(
+    val testing: Boolean = false,
+    val message: String? = null,
+    val success: Boolean = false,
+)
+
 private enum class SettingsSection(
     val title: String,
     val summary: String,
@@ -142,20 +150,36 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     val chatHarness = remember(context) {
-                        context.sanchoModelHarness(HarnessRole.CHAT_VISION)
+                        context.sanchoModelHarness(HarnessRole.CHAT_VISION, toolsEnabled = true)
                     }
                     val localLlm = remember(context) {
                         if (BuildConfig.MOCK_PREVIEW) {
                             MockLocalLlm()
                         } else {
-                            LiteRtLocalLlm(context.cacheDir, harness = chatHarness)
+                            LiteRtLocalLlm(
+                                context.cacheDir,
+                                harness = chatHarness,
+                                toolCatalog = ToolCatalog.browserHandoff,
+                            )
                         }
+                    }
+                    val toolExecutionCoordinator = remember(context) {
+                        ToolExecutionCoordinator(
+                            catalog = ToolCatalog.browserHandoff,
+                            executors = mapOf(
+                                ToolName.OPEN_WEB_SEARCH to RoutingSearchExecutor(
+                                    context = context,
+                                    settings = ChatSettingsStore(context),
+                                ),
+                            ),
+                        )
                     }
                     GalaxyBackdrop {
                         SanchoChat(
                             modelImporter = modelImporter,
                             localLlm = localLlm,
                             initialModelReady = BuildConfig.MOCK_PREVIEW,
+                            toolExecutionCoordinator = toolExecutionCoordinator,
                         )
                     }
                 }
@@ -356,6 +380,18 @@ private fun ColumnScope.VoiceSettingsPanel(
 private fun ColumnScope.ChatSettingsPanel(
     metricsEnabled: Boolean,
     onMetricsEnabledChange: (Boolean) -> Unit,
+    showSearchQuery: Boolean,
+    onShowSearchQueryChange: (Boolean) -> Unit,
+    allowMultipleSearches: Boolean,
+    onAllowMultipleSearchesChange: (Boolean) -> Unit,
+    webSearchMode: WebSearchMode,
+    onWebSearchModeChange: (WebSearchMode) -> Unit,
+    searxngEndpoint: String,
+    onSearxngEndpointChange: (String) -> Unit,
+    braveApiKey: String,
+    onBraveApiKeyChange: (String) -> Unit,
+    braveApiTestState: BraveApiTestUiState,
+    onTestBraveApiKey: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -396,6 +432,129 @@ private fun ColumnScope.ChatSettingsPanel(
                         onCheckedChange = onMetricsEnabledChange,
                     )
                 }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show web-search query")
+                        Text(
+                            "Review and edit the query before searching",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = showSearchQuery,
+                        onCheckedChange = onShowSearchQueryChange,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Allow multiple searches")
+                        Text(
+                            "Allow up to five searches in one prompt",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = allowMultipleSearches,
+                        onCheckedChange = onAllowMultipleSearchesChange,
+                    )
+                }
+                HorizontalDivider()
+                Text("Web search destination", style = MaterialTheme.typography.titleSmall)
+                WebSearchMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = webSearchMode == mode,
+                            onClick = { onWebSearchModeChange(mode) },
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                when (mode) {
+                                    WebSearchMode.VANADIUM -> "Open in Vanadium"
+                                    WebSearchMode.SEARXNG -> "Search with SearXNG"
+                                    WebSearchMode.BRAVE_API -> "Search with Brave API"
+                                },
+                            )
+                            Text(
+                                when (mode) {
+                                    WebSearchMode.VANADIUM -> "Use Brave Search in the browser"
+                                    WebSearchMode.SEARXNG -> "Use a configured SearXNG HTTPS server"
+                                    WebSearchMode.BRAVE_API -> "Use a configured Brave Search API key"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                if (webSearchMode == WebSearchMode.SEARXNG) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = searxngEndpoint,
+                        onValueChange = onSearxngEndpointChange,
+                        label = { Text("SearXNG HTTPS endpoint") },
+                        placeholder = { Text("https://search.example") },
+                        singleLine = true,
+                        supportingText = { Text("Use the server base URL, without /search or query parameters.") },
+                    )
+                }
+                if (webSearchMode == WebSearchMode.BRAVE_API) {
+                    var showBraveApiKey by remember { mutableStateOf(false) }
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = braveApiKey,
+                        onValueChange = onBraveApiKeyChange,
+                        label = { Text("Brave Search API key") },
+                        singleLine = true,
+                        visualTransformation = if (showBraveApiKey) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            TextButton(onClick = { showBraveApiKey = !showBraveApiKey }) {
+                                Text(if (showBraveApiKey) "Hide" else "Show")
+                            }
+                        },
+                        supportingText = {
+                            Text("Stored encrypted with Android Keystore; never commit this key.")
+                        },
+                    )
+                    Button(
+                        enabled = braveApiKey.isNotBlank() && !braveApiTestState.testing,
+                        onClick = onTestBraveApiKey,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ActionGreen,
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Text(if (braveApiTestState.testing) "Testing…" else "Test API key")
+                    }
+                    braveApiTestState.message?.let { message ->
+                        Text(
+                            message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (braveApiTestState.success) {
+                                StatusReadyGreen
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
+                }
             }
         }
     }
@@ -411,6 +570,65 @@ private fun StreamingAssistantText(
         LaunchedEffect(text) {
             withFrameNanos { frameTimeNanos ->
                 onDisplayed(text, frameTimeNanos)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolConfirmationCard(
+    showQuery: Boolean,
+    query: String,
+    webSearchMode: WebSearchMode,
+    onApprove: (String?) -> Unit,
+    onDeny: () -> Unit,
+) {
+    var editedQuery by remember(query) { mutableStateOf(query) }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 4.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Sancho wants to search the web", style = MaterialTheme.typography.titleSmall)
+            Text(
+                when (webSearchMode) {
+                    WebSearchMode.VANADIUM ->
+                        "This will open Brave Search in Vanadium. Sancho will not send your image or conversation history."
+                    WebSearchMode.SEARXNG ->
+                        "This will send only the query to your configured SearXNG server. Images and conversation history stay local."
+                    WebSearchMode.BRAVE_API ->
+                        "This will send only the query to Brave Search API. Images and conversation history stay local."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (showQuery) {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = editedQuery,
+                    onValueChange = { editedQuery = it },
+                    label = { Text("Search query") },
+                    singleLine = true,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onApprove(if (showQuery) editedQuery else null) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ActionGreen,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Text("Search")
+                }
+                TextButton(onClick = onDeny) {
+                    Text("Cancel")
+                }
             }
         }
     }
@@ -660,16 +878,46 @@ private fun SanchoChat(
     modelImporter: ModelImporter,
     localLlm: LocalLlm,
     initialModelReady: Boolean = false,
+    toolExecutionCoordinator: ToolExecutionCoordinator? = null,
 ) {
-    val chatViewModel: ChatViewModel = viewModel(
-        factory = ChatViewModel.factory(modelImporter, localLlm, initialModelReady),
-    )
-    val state by chatViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val chatSettings = remember(context) { ChatSettingsStore(context) }
     var metricsEnabled by remember(chatSettings) {
         mutableStateOf(chatSettings.metricsEnabled())
     }
+    var showSearchQuery by remember(chatSettings) {
+        mutableStateOf(chatSettings.showSearchQuery())
+    }
+    var allowMultipleSearches by remember(chatSettings) {
+        mutableStateOf(chatSettings.allowMultipleSearches())
+    }
+    var webSearchMode by remember(chatSettings) {
+        mutableStateOf(chatSettings.webSearchMode())
+    }
+    var searxngEndpoint by remember(chatSettings) {
+        mutableStateOf(chatSettings.searxngEndpoint())
+    }
+    var braveApiKey by remember(chatSettings) {
+        mutableStateOf(chatSettings.braveApiKey())
+    }
+    var braveApiTestState by remember { mutableStateOf(BraveApiTestUiState()) }
+    val toolPolicyProvider = remember(chatSettings) {
+        ToolPolicyProvider {
+            ToolConversationPolicy(
+                maxToolCallsPerRun = if (chatSettings.allowMultipleSearches()) 5 else 1,
+            )
+        }
+    }
+    val chatViewModel: ChatViewModel = viewModel(
+        factory = ChatViewModel.factory(
+            modelImporter,
+            localLlm,
+            initialModelReady,
+            toolExecutionCoordinator,
+            toolPolicyProvider,
+        ),
+    )
+    val state by chatViewModel.uiState.collectAsStateWithLifecycle()
     val reportStore = remember(context) {
         ReportStore(
             contentResolver = context.contentResolver,
@@ -904,6 +1152,47 @@ private fun SanchoChat(
                         metricsEnabled = enabled
                         chatSettings.setMetricsEnabled(enabled)
                     },
+                    showSearchQuery = showSearchQuery,
+                    onShowSearchQueryChange = { enabled ->
+                        showSearchQuery = enabled
+                        chatSettings.setShowSearchQuery(enabled)
+                    },
+                    allowMultipleSearches = allowMultipleSearches,
+                    onAllowMultipleSearchesChange = { enabled ->
+                        allowMultipleSearches = enabled
+                        chatSettings.setAllowMultipleSearches(enabled)
+                    },
+                    webSearchMode = webSearchMode,
+                    onWebSearchModeChange = { mode ->
+                        webSearchMode = mode
+                        chatSettings.setWebSearchMode(mode)
+                    },
+                    searxngEndpoint = searxngEndpoint,
+                    onSearxngEndpointChange = { endpoint ->
+                        searxngEndpoint = endpoint
+                        chatSettings.setSearxngEndpoint(endpoint)
+                    },
+                    braveApiKey = braveApiKey,
+                    onBraveApiKeyChange = { apiKey ->
+                        braveApiKey = apiKey
+                        chatSettings.setBraveApiKey(apiKey)
+                        braveApiTestState = BraveApiTestUiState()
+                    },
+                    braveApiTestState = braveApiTestState,
+                    onTestBraveApiKey = {
+                        braveApiTestState = BraveApiTestUiState(testing = true)
+                        scope.launch {
+                            braveApiTestState = when (val result = testBraveApiKey(braveApiKey)) {
+                                is BraveApiKeyTestResult.Success -> BraveApiTestUiState(
+                                    message = "Connected to Brave Search (${result.resultCount} results received).",
+                                    success = true,
+                                )
+                                is BraveApiKeyTestResult.Failure -> BraveApiTestUiState(
+                                    message = result.message,
+                                )
+                            }
+                        }
+                    },
                 )
                 SettingsSection.REPORTS -> Unit
             }
@@ -912,6 +1201,17 @@ private fun SanchoChat(
                 modifier = Modifier.offset(y = (-4).dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
             )
+
+            state.pendingToolCall?.let { call ->
+                val query = (call.arguments as? OpenWebSearchArguments)?.query.orEmpty()
+                ToolConfirmationCard(
+                    showQuery = showSearchQuery,
+                    query = query,
+                    webSearchMode = webSearchMode,
+                    onApprove = chatViewModel::approvePendingTool,
+                    onDeny = chatViewModel::denyPendingTool,
+                )
+            }
 
         state.imageAttachment?.let { attachment ->
             Surface(

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -38,6 +39,7 @@ data class ChatUiState(
     val isModelReady: Boolean = false,
     val isGenerating: Boolean = false,
     val imageAttachment: ImageAttachment? = null,
+    val pendingToolCall: ValidatedToolCall? = null,
 )
 
 private const val STREAM_UI_UPDATE_INTERVAL_MILLIS = 50L
@@ -47,10 +49,15 @@ class ChatViewModel(
     private val modelImporter: ModelImporter? = null,
     private val localLlm: LocalLlm? = null,
     private val initialModelReady: Boolean = false,
+    private val toolExecutionCoordinator: ToolExecutionCoordinator? = null,
+    private val toolPolicyProvider: ToolPolicyProvider = ToolPolicyProvider {
+        ToolConversationPolicy()
+    },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private var generationJob: Job? = null
+    private var pendingToolDecision: CompletableDeferred<ToolConfirmationDecision>? = null
 
     init {
         if (initialModelReady) {
@@ -158,26 +165,66 @@ class ChatViewModel(
                 lastUiUpdateNanos = System.nanoTime()
             }
 
-            try {
-                llm.stream(LlmRequest(prompt = prompt, imageFile = imageAttachment?.file)).collect { chunk ->
-                    if (chunk.isEmpty()) return@collect
-                    val firstTokenMillis = if (timeToFirstTokenMillis == null) {
-                        (System.nanoTime() - startedAtNanos) / 1_000_000L
-                    } else {
-                        null
-                    }
-                    timeToFirstTokenMillis = timeToFirstTokenMillis ?: firstTokenMillis
-                    responseText.append(chunk)
+            suspend fun appendChunk(chunk: String) {
+                if (chunk.isEmpty()) return
+                val firstTokenMillis = if (timeToFirstTokenMillis == null) {
+                    (System.nanoTime() - startedAtNanos) / 1_000_000L
+                } else {
+                    null
+                }
+                timeToFirstTokenMillis = timeToFirstTokenMillis ?: firstTokenMillis
+                responseText.append(chunk)
 
-                    val elapsedSinceUpdateMillis =
-                        (System.nanoTime() - lastUiUpdateNanos) / 1_000_000L
-                    if (publishedResponseLength == 0 ||
-                        responseText.length - publishedResponseLength >= STREAM_UI_UPDATE_MIN_CHARS ||
-                        elapsedSinceUpdateMillis >= STREAM_UI_UPDATE_INTERVAL_MILLIS
-                    ) {
-                        publishResponse(streaming = true)
-                        yield()
+                val elapsedSinceUpdateMillis =
+                    (System.nanoTime() - lastUiUpdateNanos) / 1_000_000L
+                if (publishedResponseLength == 0 ||
+                    responseText.length - publishedResponseLength >= STREAM_UI_UPDATE_MIN_CHARS ||
+                    elapsedSinceUpdateMillis >= STREAM_UI_UPDATE_INTERVAL_MILLIS
+                ) {
+                    publishResponse(streaming = true)
+                    yield()
+                }
+            }
+
+            try {
+                val request = LlmRequest(prompt = prompt, imageFile = imageAttachment?.file)
+                val toolRunner = toolExecutionCoordinator?.let { coordinator ->
+                    ToolConversationRunner(
+                        localLlm = llm,
+                        catalog = ToolCatalog.browserHandoff,
+                        executor = coordinator,
+                        confirm = ::awaitToolConfirmation,
+                        maxToolCallsPerRun = toolPolicyProvider.current().maxToolCallsPerRun,
+                    )
+                }
+                if (toolRunner != null) {
+                    toolRunner.run(request).collect { event ->
+                        when (event) {
+                            is ToolConversationEvent.TextDelta -> appendChunk(event.text)
+                            is ToolConversationEvent.ConfirmationRequested -> {
+                                _uiState.value = _uiState.value.copy(
+                                    status = "Waiting for web-search approval…",
+                                )
+                            }
+                            is ToolConversationEvent.ToolExecuted -> {
+                                _uiState.value = _uiState.value.copy(
+                                    status = event.result.displayMessage
+                                        ?: if (event.result.status == ToolExecutionStatus.SUCCEEDED) {
+                                            "Web search completed."
+                                        } else {
+                                            "Web search was not completed."
+                                        },
+                                )
+                            }
+                            is ToolConversationEvent.ToolRejected -> {
+                                _uiState.value = _uiState.value.copy(
+                                    status = "Web search declined: ${event.message}",
+                                )
+                            }
+                        }
                     }
+                } else {
+                    llm.stream(request).collect { chunk -> appendChunk(chunk) }
                 }
                 totalResponseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
                 publishResponse(streaming = false)
@@ -204,6 +251,9 @@ class ChatViewModel(
                     status = "Local inference failed: ${error.message ?: "unknown error"}",
                 )
             } finally {
+                pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
+                pendingToolDecision = null
+                _uiState.value = _uiState.value.copy(pendingToolCall = null)
                 _uiState.value = _uiState.value.copy(isGenerating = false)
                 generationJob = null
             }
@@ -213,8 +263,51 @@ class ChatViewModel(
     fun cancelGeneration() {
         if (!_uiState.value.isGenerating) return
         _uiState.value = _uiState.value.copy(status = "Stopping…")
+        pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
         generationJob?.cancel()
     }
+
+    fun approvePendingTool(editedQuery: String? = null) {
+        val call = _uiState.value.pendingToolCall ?: return
+        val approvedCall = if (editedQuery.isNullOrBlank() || editedQuery == searchQuery(call)) {
+            call.approve()
+        } else {
+            when (
+                val validation = ToolCatalog.browserHandoff.validate(
+                    RawToolCall(
+                        id = call.id,
+                        name = call.spec.name.wireName,
+                        arguments = mapOf("query" to editedQuery),
+                    ),
+                )
+            ) {
+                is ToolCallValidation.Accepted -> validation.call.approve()
+                is ToolCallValidation.Rejected -> {
+                    _uiState.value = _uiState.value.copy(status = validation.message)
+                    return
+                }
+            }
+        }
+        pendingToolDecision?.complete(ToolConfirmationDecision.Approved(approvedCall))
+    }
+
+    fun denyPendingTool() {
+        pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
+    }
+
+    private suspend fun awaitToolConfirmation(call: ValidatedToolCall): ToolConfirmationDecision {
+        val decision = CompletableDeferred<ToolConfirmationDecision>()
+        pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
+        pendingToolDecision = decision
+        _uiState.value = _uiState.value.copy(
+            pendingToolCall = call,
+            status = "Waiting for web-search approval…",
+        )
+        return decision.await()
+    }
+
+    private fun searchQuery(call: ValidatedToolCall): String =
+        (call.arguments as? OpenWebSearchArguments)?.query.orEmpty()
 
     fun recordMarkdownParseTime(responseText: String, elapsedMillis: Long) {
         val state = _uiState.value
@@ -322,12 +415,22 @@ class ChatViewModel(
             modelImporter: ModelImporter,
             localLlm: LocalLlm,
             initialModelReady: Boolean = false,
+            toolExecutionCoordinator: ToolExecutionCoordinator? = null,
+            toolPolicyProvider: ToolPolicyProvider = ToolPolicyProvider {
+                ToolConversationPolicy()
+            },
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-                        return ChatViewModel(modelImporter, localLlm, initialModelReady) as T
+                        return ChatViewModel(
+                            modelImporter,
+                            localLlm,
+                            initialModelReady,
+                            toolExecutionCoordinator,
+                            toolPolicyProvider,
+                        ) as T
                     }
                     throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
                 }

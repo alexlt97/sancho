@@ -8,6 +8,8 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 composeUiTest = "1.10.5"
 litertLm = "0.18.0"
+moonshineVoice = "0.1.5"
+documentfile = "1.1.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -23,4 +25,6 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 litertlm-android = { module = "com.google.ai.edge.litertlm:litertlm-android", version.ref = "litertLm" }
+moonshine-voice = { module = "ai.moonshine:moonshine-voice", version.ref = "moonshineVoice" }
+androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 junit = { module = "junit:junit", version.ref = "junit" }

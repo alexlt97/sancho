@@ -56,10 +56,13 @@ fi
 
 # AndroidX may generate this app-private permission for non-exported receivers.
 # RECORD_AUDIO is the one explicit capability required by embedded Moonshine STT.
-# No network, phone, or storage permissions are allowed here.
+# No phone or storage permissions are allowed here. INTERNET is restricted to
+# the opt-in SearXNG or Brave Search executors; normal local chat and Vanadium
+# handoff do not use it.
 UNEXPECTED="$(grep '^uses-permission:' <<<"$PERMISSIONS" \
   | grep -v -F "${PACKAGE_NAME}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" \
-  | grep -v -F "android.permission.RECORD_AUDIO" || true)"
+  | grep -v -F "android.permission.RECORD_AUDIO" \
+  | grep -v -F "android.permission.INTERNET" || true)"
 if [[ -n "$UNEXPECTED" ]]; then
   echo "[FAIL] APK declares unexpected permissions:" >&2
   echo "$UNEXPECTED" >&2
@@ -73,4 +76,4 @@ else
   exit 1
 fi
 
-echo "[PASS] APK declares no permissions outside microphone and its app-private AndroidX permission"
+echo "[PASS] APK declares only microphone, opt-in web-search internet, and its app-private AndroidX permission"

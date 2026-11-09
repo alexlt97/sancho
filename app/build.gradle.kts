@@ -50,6 +50,9 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Android supplies org.json at runtime; this test-only implementation makes
+    // the same parser executable in the local JVM test task.
+    testImplementation("org.json:json:20231013")
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
