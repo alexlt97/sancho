@@ -152,6 +152,36 @@
 - Why: AgentFlow uses embedding-based phrase matching and scripted `ask`/`confirm`/`choose` flows, so it can be faster and more deterministic for known tasks but cannot fairly answer arbitrary questions.
 - Detail: the experiment will hold Moonshine STT and Android TextToSpeech constant, use a mock note-confirmation flow, require an explicitly imported local embedding model, and log only numeric latency/resource/task-success metrics. It must not alter the default widget or Quick Settings Gemma path until device evidence exists.
 
+## 2026-11-08 — Offline tool contract before browser handoff
+
+- Decision: implement the typed tool contract and deterministic mock executor before adding browser or native web access.
+- Why: model-generated intent must be validated independently of the model, and the executor boundary must be testable without network permissions or a device.
+- Detail: the first tool is `open_web_search`, limited to a validated query, explicit confirmation, a ten-second timeout, and bounded output. The later Vanadium handoff will build the URL in Sancho; the model will never provide an executable URL.
+
+## 2026-11-08 — Manual LiteRT-LM tool loop
+
+- Decision: expose LiteRT-LM tool calls as application events and keep `automaticToolCalling` disabled for the opt-in browser-tool conversation.
+- Why: Sancho must validate, confirm, execute, and bound every model-requested action before returning a tool result to Gemma.
+- Detail: the default chat and voice conversations remain tool-free. The manual loop allows one tool call and one tool-result turn by default; the model receives only the validated result and never supplies an executable browser URL.
+
+## 2026-11-08 — Browser handoff executor
+
+- Decision: implement the first real web action as an approval-gated explicit Vanadium intent targeting Brave Search.
+- Why: this lets Sancho test intent recognition and user consent without adding `INTERNET` permission or sending conversation data through Sancho's own network stack.
+- Detail: Sancho builds the HTTPS search URL from the validated query, pins the launch to Vanadium's package, and reports unavailable or failed launches as bounded tool results. At this decision point the native SearXNG route was still deferred; it is now documented separately below.
+
+## 2026-11-08 — Optional SearXNG retrieval
+
+- Decision: add SearXNG as an opt-in in-app route for the existing approved `open_web_search` tool; keep Vanadium as the default.
+- Why: a self-hosted SearXNG instance gives the user controlled retrieval without handing the whole conversation to a browser, while preserving an offline/local default when search is not requested.
+- Detail: Sancho sends only the validated query to a user-configured HTTPS endpoint, requests JSON, follows no redirects, accepts at most five results and 128 KiB of response data, marks returned text as untrusted reference material, and never stores credentials or search history. The APK's only network permission is therefore limited to this explicitly selected route; native arbitrary page fetching remains deferred.
+
+## 2026-11-09 — Optional Brave Search API retrieval
+
+- Decision: add Brave Search API as an opt-in direct retrieval route while keeping Vanadium as the default and SearXNG as the self-hosted option.
+- Why: Brave provides a stable structured web-search API without requiring a Python service on the phone, which makes the first real network-provider test easier and avoids a server process consuming phone resources.
+- Detail: Sancho sends only the approved query over HTTPS, sends the API key only as the `X-Subscription-Token` header, stores the key encrypted with Android Keystore, caps responses and results, and marks returned text untrusted. The key is user-provided and must never be committed to the public repository; Brave billing and query-retention terms remain an explicit trade-off.
+
 ## 2026-11-06 — Bounded chat stream rendering
 
 - Decision: coalesce fast model chunks into chat UI updates at a 50 ms or 96-character boundary, show plain assistant text while generation is active, and parse Markdown/math once the response is complete.

@@ -47,7 +47,7 @@
     "behavior": "A typed tool contract validates names, arguments, risk levels, confirmation states, and bounded execution results.",
     "verification": "make test",
     "state": "planned",
-    "evidence": "planned V2 feature; implementation not started",
+    "evidence": "typed ToolSpec, RawToolCall, validation, risk classification, and confirmation transitions implemented in ToolContract.kt; make test passes; feature remains planned until the current WIP feature is formally transitioned",
     "layers": [
       {
         "label": "runtime",
@@ -61,7 +61,7 @@
     "behavior": "Deterministic mock tools exercise unknown calls, malformed arguments, timeouts, cancellation, oversized output, and untrusted results.",
     "verification": "make test",
     "state": "planned",
-    "evidence": "planned V2 feature; implementation not started",
+    "evidence": "bounded ToolExecutionCoordinator and deterministic MockToolExecutor implemented with tests for approval, output limits, timeout, failure, and cancellation; make test passes; feature remains planned until the current WIP feature is formally transitioned",
     "layers": [
       {
         "label": "runtime",
@@ -75,7 +75,7 @@
     "behavior": "Sancho parses structured tool calls, executes approved tools, resumes bounded streaming, caps tool turns, and preserves local chat when tools are disabled.",
     "verification": "make test",
     "state": "planned",
-    "evidence": "planned V2 feature; implementation not started",
+    "evidence": "ToolConversationRunner and ChatViewModel now validate structured events, pause for confirmation, execute bounded results, resume the local conversation, cap tool turns/calls, preserve the default tool-free LocalLlm path, and support persisted query-preview and multiple-search settings; temporary Vanadium handoff UI is wired and host checks pass; device installation of this settings iteration is pending Pixel reconnection; feature remains planned until the current WIP feature is formally transitioned",
     "layers": [
       {
         "label": "runtime",
@@ -86,15 +86,15 @@
   },
   {
     "id": "F005",
-    "behavior": "Read-only native web tools provide controlled search and page fetching with HTTPS, host policy, bounded results, source labels, and visible network status.",
+    "behavior": "Read-only native web search provides controlled SearXNG retrieval with HTTPS, bounded results, source labels, and visible network status; arbitrary page fetching remains deferred.",
     "verification": "make check",
     "state": "planned",
-    "evidence": "planned V2 feature; implementation not started",
+    "evidence": "Opt-in SearxngSearchExecutor, BraveSearchExecutor, and RoutingSearchExecutor now provide bounded HTTPS retrieval for the approved search tool, with mocked transport tests, five-result and 128 KiB response bounds, no redirects, no endpoint credentials, encrypted Brave API-key storage, untrusted-result labeling, and persisted Chat Settings provider selection; native arbitrary page fetching and real-provider device validation remain pending",
     "layers": [
       {
         "label": "static",
         "cmd": "make check",
-        "repair": "Record the network permission decision, add host-policy tests, and verify no tool bypasses the executor boundary."
+        "repair": "Verify the documented network permission, HTTPS endpoint policy, redirect behavior, and that no tool bypasses the executor boundary."
       },
       {
         "label": "runtime",
