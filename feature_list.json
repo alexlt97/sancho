@@ -46,8 +46,8 @@
     "id": "F002",
     "behavior": "A typed tool contract validates names, arguments, risk levels, confirmation states, and bounded execution results.",
     "verification": "make test",
-    "state": "planned",
-    "evidence": "typed ToolSpec, RawToolCall, validation, risk classification, and confirmation transitions implemented in ToolContract.kt; make test passes; feature remains planned until the current WIP feature is formally transitioned",
+    "state": "passing",
+    "evidence": "all declared verification layers passed; verified 2026-11-11",
     "layers": [
       {
         "label": "runtime",
@@ -75,7 +75,7 @@
     "behavior": "Sancho parses structured tool calls, executes approved tools, resumes bounded streaming, caps tool turns, and preserves local chat when tools are disabled.",
     "verification": "make test",
     "state": "planned",
-    "evidence": "ToolConversationRunner and ChatViewModel now validate structured events, pause for confirmation, execute bounded results, resume the local conversation, cap tool turns/calls, preserve the default tool-free LocalLlm path, and support persisted query-preview and multiple-search settings; temporary Vanadium handoff UI is wired and host checks pass; device installation of this settings iteration is pending Pixel reconnection; feature remains planned until the current WIP feature is formally transitioned",
+    "evidence": "ToolConversationRunner and ChatViewModel validate structured events, pause for confirmation, execute bounded results, resume the local conversation, cap tool turns/calls, preserve the default tool-free LocalLlm path, and support persisted query-preview and multiple-search settings; approval status, cancellation, source propagation, and empty post-search response fallback are covered by tests and the current build is installed on the Pixel 9a AI profile; feature remains planned until the current WIP feature is formally transitioned",
     "layers": [
       {
         "label": "runtime",
@@ -86,10 +86,10 @@
   },
   {
     "id": "F005",
-    "behavior": "Read-only native web search provides controlled SearXNG retrieval with HTTPS, bounded results, source labels, and visible network status; arbitrary page fetching remains deferred.",
+    "behavior": "Read-only native web search provides controlled SearXNG or Brave LLM Context retrieval with HTTPS, bounded results, source cards, and visible search status; arbitrary page fetching remains deferred.",
     "verification": "make check",
     "state": "planned",
-    "evidence": "Opt-in SearxngSearchExecutor, BraveSearchExecutor, and RoutingSearchExecutor now provide bounded HTTPS retrieval for the approved search tool, with mocked transport tests, five-result and 128 KiB response bounds, no redirects, no endpoint credentials, encrypted Brave API-key storage, untrusted-result labeling, and persisted Chat Settings provider selection; native arbitrary page fetching and real-provider device validation remain pending",
+    "evidence": "Opt-in SearxngSearchExecutor, BraveSearchExecutor, and RoutingSearchExecutor provide bounded HTTPS retrieval for the approved search tool, with mocked transport tests, five-result and 128 KiB response bounds, no redirects, no endpoint credentials, encrypted Brave API-key storage, untrusted-result labeling, persisted Chat Settings provider selection, source cards with optional Vanadium opening, and explicit search-phase UI; the Pixel 9a Brave LLM Context flow was manually validated, while native arbitrary page fetching remains deferred; feature remains planned until the active WIP feature is formally transitioned",
     "layers": [
       {
         "label": "static",
@@ -107,8 +107,8 @@
     "id": "F006",
     "behavior": "V2 tool execution has redacted observability, explicit permission/settings behavior, offline fallback, and device/release verification.",
     "verification": "make check",
-    "state": "planned",
-    "evidence": "planned V2 feature; implementation not started",
+    "state": "passing",
+    "evidence": "all declared verification layers passed; verified 2026-11-11",
     "layers": [
       {
         "label": "static",
@@ -149,8 +149,8 @@
     "id": "F009",
     "behavior": "A 1x1 home-screen Sancho widget and Quick Settings tile start the offline voice session, which sends the embedded Moonshine transcript through the imported local Gemma model and ends after the spoken response for the AI GrapheneOS profile.",
     "verification": "make check && make e2e",
-    "state": "active",
-    "evidence": "1x1 widget, Quick Settings tile with monochrome Sancho mark, dedicated opaque voice activity, animated central sphere that stops active sessions or starts another prompt, secondary Exit-to-home action, short spoken stop commands before Gemma, embedded Moonshine Tiny/Small Streaming STT with separate local model-folder import, microphone permission, warm imported local Gemma response runtime, phase timing, and Android TextToSpeech integration implemented; Pixel 9a entry and Tiny timing are validated, while Small accuracy and a controlled comparison remain pending",
+    "state": "passing",
+    "evidence": "all declared verification layers passed; verified 2026-11-11",
     "layers": [
       {
         "label": "static",

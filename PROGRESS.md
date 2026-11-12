@@ -3,7 +3,7 @@
 ## Current State
 
 - Last commit: none (initial repository bootstrap)
-- Verification status: `make check`, clean-check, instrumentation compilation, and the guarded Pixel 9a real-model harness pass; Android equation-rendering regression coverage, native image inference, responsive Markdown table/math rendering, complex, Fourier, bold-symbol, and matrix equation normalization, and time-to-first-token presentation pass; focused Espresso Compose assertions remain blocked by GrapheneOS compatibility with the unavailable `android.hardware.input.InputManager.getInstance()` API, while a controlled ADB UI run passed and recorded first-visible-text timing
+- Verification status: `make check`, clean-check, instrumentation compilation, and the guarded Pixel 9a real-model harness pass; Android equation-rendering regression coverage, native image inference, responsive Markdown table/math rendering, complex, Fourier, bold-symbol, and matrix equation normalization, and time-to-first-token presentation pass; GrapheneOS-safe UiAutomator device assertions now pass and avoid the unavailable Espresso `android.hardware.input.InputManager.getInstance()` API
 - Product status: text chat and native Gemma image requests are wired; assistant Markdown, inline math, time-to-first-token presentation, image previews before sending and in submitted user messages, subtle role-colored message surfaces, explicit edge-to-edge keyboard-safe composer layout, free scrolling during generation, cancellation for long generations, and a jump-to-latest control are included; new message rows are revealed automatically without forcing the list position during streaming; the top-right Settings screen now has concise navigation rows for Models, Voice settings, Reports, and Chat settings, with each section opening its own detail page; the chat composer now has compact send/stop icon controls, a dark galaxy theme, safe system-bar spacing, and the Sancho launcher icon; local issue reports support editing, deletion, screenshots, and `sancho_report.zip` export with post-export clearing; a dependency-free PC analyzer produces priority and implementation-risk proposals; a conservative one-command local emulator preview uses a deterministic streaming mock model, while phone builds use LiteRT-LM; GPU inference remains verified through a separate benchmark path
 - Target: Pixel 9a running GrapheneOS
 
@@ -40,17 +40,24 @@
 - V2 Brave API diagnostics: the key check now distinguishes safe HTTP 401, 403, and 429 outcomes from network failures without exposing the key or response body.
 - V2 Brave API request compatibility: web-search requests now send explicit JSON, identity-encoding, and `Cache-Control: no-cache` headers after the live key check exposed an HTTP 422 validation response.
 - V2 Brave API diagnostics: diagnostic requests now request identity encoding and a Sancho user-agent so Brave's safe validation detail can be displayed reliably on Android.
+- V2 web-search UX: approved searches now clear the confirmation card immediately, show explicit Searching/results/failure/cancelled status, and attach bounded Brave/SearXNG source links to the final assistant message.
+- V2 source controls: Chat Settings now persists source-panel visibility, and displayed HTTPS sources can be opened through an explicit Vanadium intent without changing the local model or search executor boundary.
+- V2 search-response stabilization: source numbers now use a dedicated layout column, long URLs wrap safely, and a successful search with an empty final model response produces a visible fallback instead of silently ending; the revised build is installed for consecutive-search validation on the Pixel 9a.
+- F006 security/observability implementation: Chat Settings now controls web-search enablement, content-free metric retention, source visibility, query preview, and bounded multi-search; successful and failed searches expose provider/status/duration/result-count metrics, at most 100 redacted events are stored app-privately when enabled, the user can clear them, and `make tool-metrics` retrieves only the sanitized JSONL file. The full phone acceptance run is documented in `docs/f006-phone-test.md`.
+- F006 device extraction repair: `make tool-metrics` now resolves the active GrapheneOS AI user and reads that user's app-private storage instead of owner-user storage; the first corrected extraction returned a 177-byte content-free Brave event.
 - V2 Vanadium handoff revalidation: after the package-visibility repair, the Pixel 9a AI-profile test successfully opened Brave Search in Vanadium after approval.
 - V2 browser handoff device validation: the Pixel 9a AI-profile test confirmed current-information intent detection, approval-gated Vanadium launch, cancellation without browser launch, stable local prompts without a search request, and the no-network-permission boundary.
 - Host device design preview: `make voice-preview` now provides a Pixel-shaped mock of Chat, Settings, Reports, the widget/Quick Settings entry points, Moonshine/Gemma/TTS phases, speed changes, and Stop interaction without an emulator or phone.
+- Chat Settings navigation: the previously long page is now a concise overview with separate Metrics and Web search detail pages; all F006 controls remain available, including response metrics, redacted metric retention/clear, source visibility, search enablement, query preview, multi-search, provider selection, endpoints, and Brave key testing.
 
 ## Next Steps
 
-1. Add structured tool calls and confirmation gates for agent actions.
-2. Add an explicit backend policy or user setting if GPU startup latency is acceptable.
-3. Import Small Streaming on the Pixel 9a AI profile and measure recognition latency and quality against Tiny and the recorded FUTO baseline using repeated, matched prompts.
-4. Implement F008 voice session orchestration and F009 widget/device verification.
+1. Complete the consecutive-search phone test: approval, search status, model response/fallback, clickable sources, Vanadium handoff, and source visibility setting.
+2. Complete F006 security and observability: redacted tool events, search latency/result metrics, offline fallback, permission behavior, and release/device verification.
+3. Formally transition the implemented F002–F005 slices through the feature gate after the active WIP feature is closed; do not mark them passing by editing state alone.
+4. Import Small Streaming on the Pixel 9a AI profile and compare recognition latency and quality against Tiny and the recorded FUTO baseline using repeated, matched prompts.
 5. Add the proposed notification-based Stop action for long model responses and TTS playback.
+6. Evaluate search-intent accuracy before adding page fetching or phone-action tools.
 
 ## Performance evidence
 
@@ -58,4 +65,4 @@ Benchmark history and measurement boundaries live in [docs/performance.md](docs/
 
 ## Blockers
 
-- Focused Compose device tests currently fail before assertions on GrapheneOS because the installed Espresso version reflectively requires `android.hardware.input.InputManager.getInstance()`. App launch tests and the Android-only Markdown renderer regression test pass; the latest renderer APK still needs device installation after the phone reconnects.
+- The former focused Compose device tests failed before assertions on GrapheneOS because the installed Espresso version reflectively required `android.hardware.input.InputManager.getInstance()`. They now use UiAutomator selectors and pass on the Pixel 9a AI profile; Compose remains a production UI dependency, not a device-test driver.
