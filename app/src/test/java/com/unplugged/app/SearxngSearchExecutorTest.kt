@@ -63,6 +63,7 @@ class SearxngSearchExecutorTest {
         assertEquals("Web search completed in Sancho.", result.displayMessage)
         assertTrue(result.untrusted)
         assertTrue(result.output.contains("https://one.example"))
+        assertEquals("One", result.sources.single().title)
     }
 
     @Test

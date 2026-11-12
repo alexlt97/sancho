@@ -27,6 +27,24 @@ class ChatSettingsStore(context: Context) {
         preferences.edit().putBoolean(METRICS_ENABLED_KEY, enabled).apply()
     }
 
+    fun showWebSources(): Boolean = preferences.getBoolean(SHOW_WEB_SOURCES_KEY, true)
+
+    fun setShowWebSources(enabled: Boolean) {
+        preferences.edit().putBoolean(SHOW_WEB_SOURCES_KEY, enabled).apply()
+    }
+
+    fun webSearchEnabled(): Boolean = preferences.getBoolean(WEB_SEARCH_ENABLED_KEY, true)
+
+    fun setWebSearchEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(WEB_SEARCH_ENABLED_KEY, enabled).apply()
+    }
+
+    fun toolMetricsEnabled(): Boolean = preferences.getBoolean(TOOL_METRICS_ENABLED_KEY, false)
+
+    fun setToolMetricsEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(TOOL_METRICS_ENABLED_KEY, enabled).apply()
+    }
+
     fun showSearchQuery(): Boolean = preferences.getBoolean(SHOW_SEARCH_QUERY_KEY, false)
 
     fun setShowSearchQuery(enabled: Boolean) {
@@ -69,6 +87,9 @@ class ChatSettingsStore(context: Context) {
     private companion object {
         const val PREFERENCES_NAME = "sancho_chat_settings"
         const val METRICS_ENABLED_KEY = "metrics_enabled"
+        const val SHOW_WEB_SOURCES_KEY = "show_web_sources"
+        const val WEB_SEARCH_ENABLED_KEY = "web_search_enabled"
+        const val TOOL_METRICS_ENABLED_KEY = "tool_metrics_enabled"
         const val SHOW_SEARCH_QUERY_KEY = "show_search_query"
         const val ALLOW_MULTIPLE_SEARCHES_KEY = "allow_multiple_searches"
         const val WEB_SEARCH_MODE_KEY = "web_search_mode"

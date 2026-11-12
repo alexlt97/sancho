@@ -78,6 +78,19 @@ verify_installed_for_ai() {
     || fail "$APP_PACKAGE is not installed for AI user $USER_ID."
 }
 
+wake_target_for_ui_test() {
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP
+  "$ADB" -s "$SERIAL" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+}
+
+keep_target_awake_for_ui_test() {
+  "$ADB" -s "$SERIAL" shell svc power stayon true
+}
+
+restore_target_power_policy() {
+  "$ADB" -s "$SERIAL" shell svc power stayon false >/dev/null 2>&1 || true
+}
+
 prepare_instrumentation() {
   assemble_app
   assemble_tests
@@ -145,10 +158,37 @@ case "${1:-}" in
     select_target
     "$ADB" -s "$SERIAL" logcat -d -v brief -s SanchoVoice:I '*:S'
     ;;
+  tool-metrics)
+    select_target
+    output_path="${2:-${TOOL_METRICS_PATH:-/tmp/sancho_tool_metrics.jsonl}}"
+    mkdir -p "$(dirname "$output_path")"
+    error_path="$(mktemp)"
+    if ! "$ADB" -s "$SERIAL" shell run-as "$APP_PACKAGE" --user "$USER_ID" cat files/observability/tool-events.jsonl > "$output_path" 2>"$error_path"; then
+      if grep -Fq "No such file" "$error_path"; then
+        : > "$output_path"
+      else
+        cat "$error_path" >&2
+        rm -f "$error_path"
+        fail "Could not read sanitized tool metrics for $TARGET_USER_NAME user $USER_ID."
+      fi
+    fi
+    rm -f "$error_path"
+    bytes="$(wc -c < "$output_path" | tr -d '[:space:]')"
+    if [[ "$bytes" == "0" ]]; then
+      echo "[INFO] No stored tool metrics yet for $TARGET_USER_NAME user $USER_ID; run an approved search with metric retention enabled."
+    else
+      echo "[PASS] Sanitized tool metrics saved to $output_path ($bytes bytes); prompts, URLs, and response text are not included."
+    fi
+    ;;
   e2e)
     select_target
+    keep_target_awake_for_ui_test
+    trap restore_target_power_policy EXIT
     prepare_instrumentation
+    wake_target_for_ui_test
     run_instrumentation "Instrumentation" "com.unplugged.app.MainActivityTest,com.unplugged.app.MainActivityComposerTest"
+    trap - EXIT
+    restore_target_power_policy
     ;;
   harness-test)
     select_target
@@ -187,7 +227,7 @@ case "${1:-}" in
       "long_plain_text_benchmark="
     ;;
   *)
-    echo "Usage: $0 {install|launch|uninstall|screenshot|voice-log|e2e|harness-test|benchmark|gpu-benchmark|vision-benchmark|harness-comparison|long-plain-text-benchmark}" >&2
+    echo "Usage: $0 {install|launch|uninstall|screenshot|voice-log|tool-metrics|e2e|harness-test|benchmark|gpu-benchmark|vision-benchmark|harness-comparison|long-plain-text-benchmark}" >&2
     exit 2
     ;;
 esac

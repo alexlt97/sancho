@@ -42,8 +42,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,8 +56,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -86,34 +82,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val GalaxyColors = darkColorScheme(
-    primary = Color(0xFF7EE787),
-    onPrimary = Color(0xFF06210E),
-    secondary = Color(0xFFC9A7FF),
-    onSecondary = Color(0xFF24113F),
-    background = Color(0xFF090711),
-    onBackground = Color(0xFFF4EDFF),
-    surface = Color(0xFF151021),
-    onSurface = Color(0xFFF4EDFF),
-    surfaceVariant = Color(0xFF27203A),
-    onSurfaceVariant = Color(0xFFD0C5E3),
-)
-
-private val GalaxyGradient = Brush.linearGradient(
-    colors = listOf(
-        Color(0xFF080611),
-        Color(0xFF17102A),
-        Color(0xFF24123B),
-        Color(0xFF0B0818),
-    ),
-)
-
-private val ActionGreen = Color(0xFF1C6844)
-private val StatusReadyGreen = Color(0xFF7EE787)
-private val StatusRunningOrange = Color(0xFFFFB454)
-private val StatusUnavailableRed = Color(0xFFFF7B72)
-private val UserMessageBackground = Color(0xFF173B2D).copy(alpha = 0.72f)
-private val AssistantMessageBackground = Color(0xFF211A35).copy(alpha = 0.78f)
+private val ActionGreen = Color(0xFF176B49)
 
 private data class BraveApiTestUiState(
     val testing: Boolean = false,
@@ -128,7 +97,15 @@ private enum class SettingsSection(
     MODELS("Models", "Import and manage local models"),
     VOICE("Voice settings", "Widget, Quick Settings, and speech"),
     REPORTS("Reports", "Review and export issue reports"),
-    CHAT("Chat settings", "Appearance, metrics, and generation"),
+    CHAT("Chat settings", "Metrics and web search"),
+}
+
+private enum class ChatSettingsPage(
+    val title: String,
+    val summary: String,
+) {
+    METRICS("Metrics", "Response timing and web-search diagnostics"),
+    WEB_SEARCH("Web search", "Approval, sources, providers, and credentials"),
 }
 
 class MainActivity : ComponentActivity() {
@@ -136,11 +113,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
-            MaterialTheme(colorScheme = GalaxyColors) {
+            SanchoTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.Transparent,
-                    contentColor = GalaxyColors.onBackground,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
                 ) {
                     val context = LocalContext.current
                     val modelImporter = remember(context) {
@@ -174,7 +151,7 @@ class MainActivity : ComponentActivity() {
                             ),
                         )
                     }
-                    GalaxyBackdrop {
+                    SanchoBackdrop {
                         SanchoChat(
                             modelImporter = modelImporter,
                             localLlm = localLlm,
@@ -378,8 +355,125 @@ private fun ColumnScope.VoiceSettingsPanel(
 
 @Composable
 private fun ColumnScope.ChatSettingsPanel(
+    onOpenPage: (ChatSettingsPage) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ChatSettingsPage.entries.forEach { page ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenPage(page) }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(page.title, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            page.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(">", color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.MetricsSettingsPanel(
     metricsEnabled: Boolean,
     onMetricsEnabledChange: (Boolean) -> Unit,
+    toolMetricsEnabled: Boolean,
+    onToolMetricsEnabledChange: (Boolean) -> Unit,
+    onClearToolMetrics: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 4.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Response metrics", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Choose which local timing details appear below assistant messages.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingSwitch(
+                    title = "Show response metrics",
+                    description = "TTFT, first shown text, total time, and parse time",
+                    checked = metricsEnabled,
+                    onCheckedChange = onMetricsEnabledChange,
+                )
+                HorizontalDivider()
+                Text("Web-search diagnostics", style = MaterialTheme.typography.titleSmall)
+                SettingSwitch(
+                    title = "Store web-search metrics",
+                    description = "Keep timing, status, and result counts only; never prompts or URLs",
+                    checked = toolMetricsEnabled,
+                    onCheckedChange = onToolMetricsEnabledChange,
+                )
+                TextButton(onClick = onClearToolMetrics) {
+                    Text("Clear stored web metrics")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ColumnScope.WebSearchSettingsPanel(
+    showWebSources: Boolean,
+    onShowWebSourcesChange: (Boolean) -> Unit,
+    webSearchEnabled: Boolean,
+    onWebSearchEnabledChange: (Boolean) -> Unit,
     showSearchQuery: Boolean,
     onShowSearchQueryChange: (Boolean) -> Unit,
     allowMultipleSearches: Boolean,
@@ -409,9 +503,9 @@ private fun ColumnScope.ChatSettingsPanel(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Conversation behavior", style = MaterialTheme.typography.titleMedium)
+                Text("Web search", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Choose which local response timing details appear below assistant messages.",
+                    "Control when Sancho may search and how results are shown.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(
@@ -420,16 +514,35 @@ private fun ColumnScope.ChatSettingsPanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Show response metrics")
+                        Text("Show web sources")
                         Text(
-                            "TTFT, first shown text, total time, and parse time",
+                            "Display clickable source links below web-grounded answers",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(
-                        checked = metricsEnabled,
-                        onCheckedChange = onMetricsEnabledChange,
+                        checked = showWebSources,
+                        onCheckedChange = onShowWebSourcesChange,
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Allow web search")
+                        Text(
+                            "Permit model-requested searches after your approval",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = webSearchEnabled,
+                        onCheckedChange = onWebSearchEnabledChange,
                     )
                 }
                 HorizontalDivider()
@@ -548,7 +661,7 @@ private fun ColumnScope.ChatSettingsPanel(
                             message,
                             style = MaterialTheme.typography.bodySmall,
                             color = if (braveApiTestState.success) {
-                                StatusReadyGreen
+                                MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.error
                             },
@@ -628,6 +741,91 @@ private fun ToolConfirmationCard(
                 }
                 TextButton(onClick = onDeny) {
                     Text("Cancel")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WebSearchActivity(phase: WebSearchPhase) {
+    val (label, color) = when (phase) {
+        WebSearchPhase.IDLE -> return
+        WebSearchPhase.WAITING_FOR_APPROVAL -> "Waiting for approval" to MaterialTheme.colorScheme.tertiary
+        WebSearchPhase.SEARCHING -> "Searching the web…" to MaterialTheme.colorScheme.tertiary
+        WebSearchPhase.RESULTS_RECEIVED -> "Search results received" to MaterialTheme.colorScheme.primary
+        WebSearchPhase.FAILED -> "Web search failed" to MaterialTheme.colorScheme.error
+        WebSearchPhase.CANCELLED -> "Web search cancelled" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(color, CircleShape),
+            )
+            Text(label, style = MaterialTheme.typography.bodySmall, color = color)
+        }
+    }
+}
+
+@Composable
+private fun WebSources(
+    sources: List<WebSource>,
+    onOpenSource: (WebSource) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f),
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("Sources", style = MaterialTheme.typography.labelLarge)
+            sources.forEachIndexed { index, source ->
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onOpenSource(source) },
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = "${index + 1}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = source.title,
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = source.url,
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -842,33 +1040,12 @@ private fun ColumnScope.ReportPanel(
 }
 
 @Composable
-private fun GalaxyBackdrop(content: @Composable () -> Unit) {
-    val stars = listOf(
-        0.21f to 0.32f,
-        0.38f to 0.11f,
-        0.57f to 0.24f,
-        0.76f to 0.09f,
-        0.91f to 0.36f,
-        0.14f to 0.72f,
-        0.48f to 0.84f,
-        0.84f to 0.76f,
-    )
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(GalaxyGradient),
-        )
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            stars.forEachIndexed { index, (x, y) ->
-                drawCircle(
-                    color = Color.White.copy(alpha = if (index % 3 == 0) 0.42f else 0.2f),
-                    radius = if (index % 3 == 0) 2.2f else 1.2f,
-                    center = Offset(size.width * x, size.height * y),
-                )
-            }
-        }
+private fun SanchoBackdrop(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         content()
     }
 }
@@ -884,6 +1061,15 @@ private fun SanchoChat(
     val chatSettings = remember(context) { ChatSettingsStore(context) }
     var metricsEnabled by remember(chatSettings) {
         mutableStateOf(chatSettings.metricsEnabled())
+    }
+    var showWebSources by remember(chatSettings) {
+        mutableStateOf(chatSettings.showWebSources())
+    }
+    var webSearchEnabled by remember(chatSettings) {
+        mutableStateOf(chatSettings.webSearchEnabled())
+    }
+    var toolMetricsEnabled by remember(chatSettings) {
+        mutableStateOf(chatSettings.toolMetricsEnabled())
     }
     var showSearchQuery by remember(chatSettings) {
         mutableStateOf(chatSettings.showSearchQuery())
@@ -901,6 +1087,9 @@ private fun SanchoChat(
         mutableStateOf(chatSettings.braveApiKey())
     }
     var braveApiTestState by remember { mutableStateOf(BraveApiTestUiState()) }
+    val toolMetricsStore = remember(context) {
+        FileToolMetricsStore(File(context.filesDir, "observability/tool-events.jsonl"))
+    }
     val toolPolicyProvider = remember(chatSettings) {
         ToolPolicyProvider {
             ToolConversationPolicy(
@@ -915,6 +1104,9 @@ private fun SanchoChat(
             initialModelReady,
             toolExecutionCoordinator,
             toolPolicyProvider,
+            toolMetricsRecorder = toolMetricsStore,
+            toolMetricsEnabledProvider = chatSettings::toolMetricsEnabled,
+            webSearchEnabledProvider = chatSettings::webSearchEnabled,
         ),
     )
     val state by chatViewModel.uiState.collectAsStateWithLifecycle()
@@ -935,6 +1127,7 @@ private fun SanchoChat(
     var showSettings by remember { mutableStateOf(false) }
     var showReports by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var chatSettingsPage by remember { mutableStateOf<ChatSettingsPage?>(null) }
     var editingReportId by remember { mutableStateOf<String?>(null) }
     var screenshotReportId by remember { mutableStateOf<String?>(null) }
     val messageListState = rememberLazyListState()
@@ -1058,8 +1251,12 @@ private fun SanchoChat(
                         if (showReports) {
                             showReports = false
                             settingsSection = null
+                            chatSettingsPage = null
+                        } else if (settingsSection == SettingsSection.CHAT && chatSettingsPage != null) {
+                            chatSettingsPage = null
                         } else if (settingsSection != null) {
                             settingsSection = null
+                            chatSettingsPage = null
                         } else {
                             showSettings = false
                         }
@@ -1073,6 +1270,7 @@ private fun SanchoChat(
                 Text(
                     text = when {
                         showReports -> "Reports"
+                        chatSettingsPage != null -> chatSettingsPage!!.title
                         settingsSection != null -> settingsSection!!.title
                         else -> "Settings"
                     },
@@ -1129,6 +1327,7 @@ private fun SanchoChat(
                             editingReportId = null
                         } else {
                             settingsSection = section
+                            chatSettingsPage = null
                         }
                     },
                 )
@@ -1146,11 +1345,34 @@ private fun SanchoChat(
                     },
                     onImportMoonshineModel = { moonshineModelPicker.launch(null) },
                 )
-                SettingsSection.CHAT -> ChatSettingsPanel(
-                    metricsEnabled = metricsEnabled,
-                    onMetricsEnabledChange = { enabled ->
-                        metricsEnabled = enabled
-                        chatSettings.setMetricsEnabled(enabled)
+                SettingsSection.CHAT -> when (chatSettingsPage) {
+                    null -> ChatSettingsPanel(onOpenPage = { chatSettingsPage = it })
+                    ChatSettingsPage.METRICS -> MetricsSettingsPanel(
+                        metricsEnabled = metricsEnabled,
+                        onMetricsEnabledChange = { enabled ->
+                            metricsEnabled = enabled
+                            chatSettings.setMetricsEnabled(enabled)
+                        },
+                        toolMetricsEnabled = toolMetricsEnabled,
+                        onToolMetricsEnabledChange = { enabled ->
+                            toolMetricsEnabled = enabled
+                            chatSettings.setToolMetricsEnabled(enabled)
+                        },
+                        onClearToolMetrics = {
+                            toolMetricsStore.clear()
+                            chatViewModel.showStatus("Stored web metrics cleared.")
+                        },
+                    )
+                    ChatSettingsPage.WEB_SEARCH -> WebSearchSettingsPanel(
+                    showWebSources = showWebSources,
+                    onShowWebSourcesChange = { enabled ->
+                        showWebSources = enabled
+                        chatSettings.setShowWebSources(enabled)
+                    },
+                    webSearchEnabled = webSearchEnabled,
+                    onWebSearchEnabledChange = { enabled ->
+                        webSearchEnabled = enabled
+                        chatSettings.setWebSearchEnabled(enabled)
                     },
                     showSearchQuery = showSearchQuery,
                     onShowSearchQueryChange = { enabled ->
@@ -1193,7 +1415,8 @@ private fun SanchoChat(
                             }
                         }
                     },
-                )
+                    )
+                }
                 SettingsSection.REPORTS -> Unit
             }
         } else {
@@ -1245,6 +1468,8 @@ private fun SanchoChat(
             }
         }
 
+        WebSearchActivity(state.webSearchPhase)
+
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = messageListState,
@@ -1254,9 +1479,9 @@ private fun SanchoChat(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = if (message.author == "You") {
-                        UserMessageBackground
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        AssistantMessageBackground
+                        MaterialTheme.colorScheme.surfaceVariant
                     },
                     shape = MaterialTheme.shapes.medium,
                 ) {
@@ -1270,9 +1495,9 @@ private fun SanchoChat(
                             message.author,
                             style = MaterialTheme.typography.labelLarge,
                             color = if (message.author == "You") {
-                                GalaxyColors.primary
+                                MaterialTheme.colorScheme.primary
                             } else {
-                                GalaxyColors.secondary
+                                MaterialTheme.colorScheme.secondary
                             },
                         )
                         if (metricsEnabled && message.author == "Assistant") {
@@ -1288,6 +1513,12 @@ private fun SanchoChat(
                                 }
                                 if (message.displayUpdateCount > 0) {
                                     add("UI ${message.displayUpdateCount}")
+                                }
+                                message.webSearchMetrics?.let { searchMetrics ->
+                                    add(
+                                        "Search ${formatResponseTime(searchMetrics.elapsedMillis)} · " +
+                                            "${searchMetrics.resultCount} sources",
+                                    )
                                 }
                                 message.markdownParseTimeMillis?.let { elapsedMillis ->
                                     add("Parse ${formatResponseTime(elapsedMillis)}")
@@ -1328,6 +1559,18 @@ private fun SanchoChat(
                                         }
                                     } else {
                                         null
+                                    },
+                                )
+                            }
+                            if (showWebSources && message.sources.isNotEmpty()) {
+                                WebSources(
+                                    sources = message.sources,
+                                    onOpenSource = { source ->
+                                        if (!openWebSourceInVanadium(context, source.url)) {
+                                            chatViewModel.showStatus(
+                                                "Vanadium could not open this source.",
+                                            )
+                                        }
                                     },
                                 )
                             }
@@ -1392,7 +1635,7 @@ private fun SanchoChat(
                             unfocusedBorderColor = Color.Transparent,
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            cursorColor = GalaxyColors.primary,
+                            cursorColor = MaterialTheme.colorScheme.primary,
                         ),
                     )
                     IconButton(
@@ -1410,7 +1653,7 @@ private fun SanchoChat(
                             .size(44.dp)
                             .background(
                                 color = if (state.isGenerating) {
-                                    StatusRunningOrange
+                                    MaterialTheme.colorScheme.tertiary
                                 } else {
                                     ActionGreen
                                 },
@@ -1535,10 +1778,10 @@ private fun ModelStatus(
     modifier: Modifier = Modifier,
 ) {
     val (color, label, description) = when {
-        state.isGenerating -> Triple(StatusRunningOrange, "Generating", "Model status: generating")
-        state.isImportingModel -> Triple(StatusRunningOrange, "Loading", "Model status: loading")
-        state.isModelReady -> Triple(StatusReadyGreen, "Ready", "Model status: ready")
-        else -> Triple(StatusUnavailableRed, "Unavailable", "Model status: unavailable")
+        state.isGenerating -> Triple(MaterialTheme.colorScheme.tertiary, "Generating", "Model status: generating")
+        state.isImportingModel -> Triple(MaterialTheme.colorScheme.tertiary, "Loading", "Model status: loading")
+        state.isModelReady -> Triple(MaterialTheme.colorScheme.primary, "Ready", "Model status: ready")
+        else -> Triple(MaterialTheme.colorScheme.error, "Unavailable", "Model status: unavailable")
     }
 
     Row(

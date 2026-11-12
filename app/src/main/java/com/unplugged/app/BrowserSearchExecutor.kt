@@ -6,6 +6,19 @@ import android.net.Uri
 
 private const val VANADIUM_PACKAGE = "app.vanadium.browser"
 
+fun openWebSourceInVanadium(context: Context, rawUrl: String): Boolean {
+    val uri = Uri.parse(rawUrl)
+    if (uri.scheme != "https" || uri.host.isNullOrBlank()) return false
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+        setPackage(VANADIUM_PACKAGE)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (intent.resolveActivity(context.packageManager) == null) return false
+    return runCatching {
+        context.applicationContext.startActivity(intent)
+    }.isSuccess
+}
+
 /** Opens only a Sancho-built Brave Search URL in the explicit Vanadium browser. */
 class BrowserSearchExecutor(
     context: Context,
@@ -20,6 +33,7 @@ class BrowserSearchExecutor(
                 status = ToolExecutionStatus.FAILED,
                 output = "The search query could not be read.",
                 errorCode = "invalid_search_arguments",
+                provider = "vanadium",
             )
         val searchUri = Uri.parse(
             "https://search.brave.com/search?q=${Uri.encode(arguments.query)}",
@@ -35,12 +49,14 @@ class BrowserSearchExecutor(
                 status = ToolExecutionStatus.FAILED,
                 output = "Vanadium is not available in this profile.",
                 errorCode = "vanadium_unavailable",
+                provider = "vanadium",
             )
         }
         return try {
             applicationContext.startActivity(intent)
             ToolExecutionResult.success(call, "Search opened in Vanadium.").copy(
                 displayMessage = "Search opened in Vanadium.",
+                provider = "vanadium",
             )
         } catch (_: RuntimeException) {
             ToolExecutionResult(
@@ -49,6 +65,7 @@ class BrowserSearchExecutor(
                 status = ToolExecutionStatus.FAILED,
                 output = "Vanadium could not open the search.",
                 errorCode = "vanadium_launch_failed",
+                provider = "vanadium",
             )
         }
     }

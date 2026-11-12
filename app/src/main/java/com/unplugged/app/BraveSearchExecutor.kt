@@ -137,9 +137,12 @@ class BraveSearchExecutor(
         }
         return try {
             val payload = transport.get(buildBraveSearchUrl(arguments.query), apiKey)
-            val output = formatBraveSearchResults(parseBraveSearchResults(payload))
+            val results = parseBraveSearchResults(payload)
+            val output = formatBraveSearchResults(results)
             ToolExecutionResult.success(call, output).copy(
                 displayMessage = "Web search completed in Sancho.",
+                sources = results.map { WebSource(title = it.title, url = it.url) },
+                provider = "brave",
             )
         } catch (error: CancellationException) {
             throw error
@@ -160,6 +163,7 @@ class BraveSearchExecutor(
             output = message,
             displayMessage = message,
             errorCode = code,
+                provider = "brave",
         )
 }
 

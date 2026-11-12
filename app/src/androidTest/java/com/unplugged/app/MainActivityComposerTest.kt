@@ -1,47 +1,69 @@
 package com.unplugged.app
 
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Rule
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityComposerTest {
-    @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val device = UiDevice.getInstance(instrumentation)
+    private val appPackage = instrumentation.targetContext.packageName
+    private var activityScenario: ActivityScenario<MainActivity>? = null
+
+    @Before
+    fun launchActivity() {
+        device.wakeUp()
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        check(device.wait(Until.hasObject(By.pkg(appPackage)), 10_000)) {
+            "Sancho did not become visible within 10 seconds"
+        }
+        device.waitForIdle()
+    }
+
+    @After
+    fun closeActivity() {
+        activityScenario?.close()
+        activityScenario = null
+    }
 
     @Test
     fun composerShowsAttachmentMenuAndCompactSendControl() {
-        composeRule.onAllNodesWithText("Sancho").assertCountEquals(0)
-        composeRule.onNodeWithContentDescription("Model status", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Open settings").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Import model").assertCountEquals(0)
-        composeRule.onNodeWithContentDescription("Add attachment").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Send message").assertIsDisplayed()
+        requireVisible(By.descContains("Model status"))
+        requireVisible(By.desc("Open settings"))
+        check(device.findObject(By.text("Import model")) == null) {
+            "Model import must not be visible on the chat surface"
+        }
+        requireVisible(By.desc("Add attachment"))
+        requireVisible(By.desc("Send message"))
 
-        composeRule.onNodeWithContentDescription("Add attachment").performClick()
+        device.findObject(By.desc("Add attachment")).click()
 
-        composeRule.onNodeWithText("Choose image").assertIsDisplayed()
-        composeRule.onNodeWithText("Use camera").assertIsDisplayed()
+        requireVisible(By.text("Choose image"))
+        requireVisible(By.text("Use camera"))
     }
 
     @Test
     fun settingsShowsModelImportControl() {
-        composeRule.onNodeWithContentDescription("Open settings").performClick()
+        requireVisible(By.desc("Open settings")).click()
 
-        composeRule.onNodeWithText("Settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Models").assertIsDisplayed()
-        composeRule.onNodeWithText("Models").performClick()
-        composeRule.onNodeWithText("Import model").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Back").performClick()
-        composeRule.onNodeWithContentDescription("Back").performClick()
-        composeRule.onNodeWithContentDescription("Open settings").assertIsDisplayed()
+        requireVisible(By.text("Settings"))
+        requireVisible(By.text("Models")).click()
+        requireVisible(By.text("Import model"))
+        requireVisible(By.desc("Back")).click()
+        requireVisible(By.desc("Back")).click()
+        requireVisible(By.desc("Open settings"))
     }
+
+    private fun requireVisible(selector: androidx.test.uiautomator.BySelector) =
+        device.wait(Until.findObject(selector), 5_000).also {
+            check(it != null) { "UI element was not visible: $selector" }
+        }!!
 }

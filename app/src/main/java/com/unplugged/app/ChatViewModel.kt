@@ -28,7 +28,18 @@ data class ChatMessage(
     val timeToFirstDisplayMillis: Long? = null,
     val displayUpdateCount: Int = 0,
     val responseStartedAtNanos: Long? = null,
+    val sources: List<WebSource> = emptyList(),
+    val webSearchMetrics: WebSearchMetrics? = null,
 )
+
+enum class WebSearchPhase {
+    IDLE,
+    WAITING_FOR_APPROVAL,
+    SEARCHING,
+    RESULTS_RECEIVED,
+    FAILED,
+    CANCELLED,
+}
 
 data class ChatUiState(
     val draft: String = "",
@@ -40,6 +51,7 @@ data class ChatUiState(
     val isGenerating: Boolean = false,
     val imageAttachment: ImageAttachment? = null,
     val pendingToolCall: ValidatedToolCall? = null,
+    val webSearchPhase: WebSearchPhase = WebSearchPhase.IDLE,
 )
 
 private const val STREAM_UI_UPDATE_INTERVAL_MILLIS = 50L
@@ -53,6 +65,9 @@ class ChatViewModel(
     private val toolPolicyProvider: ToolPolicyProvider = ToolPolicyProvider {
         ToolConversationPolicy()
     },
+    private val toolMetricsRecorder: ToolMetricsRecorder? = null,
+    private val toolMetricsEnabledProvider: () -> Boolean = { false },
+    private val webSearchEnabledProvider: () -> Boolean = { true },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -92,6 +107,10 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(status = message)
     }
 
+    fun showStatus(message: String) {
+        _uiState.value = _uiState.value.copy(status = message)
+    }
+
     fun send() {
         val imageAttachment = _uiState.value.imageAttachment
         val prompt = _uiState.value.draft.trim().ifEmpty {
@@ -103,6 +122,7 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(
             draft = "",
             imageAttachment = null,
+            webSearchPhase = WebSearchPhase.IDLE,
             messages = _uiState.value.messages + ChatMessage(
                 author = "You",
                 text = prompt,
@@ -131,6 +151,9 @@ class ChatViewModel(
             var lastUiUpdateNanos = startedAtNanos
             var publishedResponseLength = 0
             val responseText = StringBuilder()
+            var responseSources: List<WebSource> = emptyList()
+            var responseWebSearchMetrics: WebSearchMetrics? = null
+            var webSearchCompleted = false
 
             fun publishResponse(streaming: Boolean) {
                 if (responseText.isEmpty() ||
@@ -149,6 +172,12 @@ class ChatViewModel(
                         isStreaming = streaming,
                         totalResponseTimeMillis = last.totalResponseTimeMillis ?: totalResponseTimeMillis,
                         responseStartedAtNanos = last.responseStartedAtNanos ?: startedAtNanos,
+                        sources = if (streaming) last.sources else responseSources,
+                        webSearchMetrics = if (streaming) {
+                            last.webSearchMetrics
+                        } else {
+                            responseWebSearchMetrics
+                        },
                     )
                 } else {
                     messages + ChatMessage(
@@ -158,6 +187,8 @@ class ChatViewModel(
                         isStreaming = streaming,
                         totalResponseTimeMillis = totalResponseTimeMillis,
                         responseStartedAtNanos = startedAtNanos,
+                        sources = if (streaming) emptyList() else responseSources,
+                        webSearchMetrics = if (streaming) null else responseWebSearchMetrics,
                     )
                 }
                 _uiState.value = _uiState.value.copy(messages = updatedMessages)
@@ -204,9 +235,32 @@ class ChatViewModel(
                             is ToolConversationEvent.ConfirmationRequested -> {
                                 _uiState.value = _uiState.value.copy(
                                     status = "Waiting for web-search approval…",
+                                    webSearchPhase = WebSearchPhase.WAITING_FOR_APPROVAL,
                                 )
                             }
                             is ToolConversationEvent.ToolExecuted -> {
+                                responseSources = event.result.sources
+                                webSearchCompleted = event.result.status == ToolExecutionStatus.SUCCEEDED
+                                responseWebSearchMetrics = WebSearchMetrics(
+                                    provider = event.result.provider,
+                                    status = event.result.status,
+                                    elapsedMillis = event.result.elapsedMillis,
+                                    resultCount = event.result.sources.size,
+                                )
+                                if (toolMetricsEnabledProvider()) {
+                                    toolMetricsRecorder?.record(
+                                        ToolExecutionMetric(
+                                            recordedAtMillis = System.currentTimeMillis(),
+                                            tool = event.result.tool.wireName,
+                                            provider = event.result.provider,
+                                            status = event.result.status,
+                                            elapsedMillis = event.result.elapsedMillis,
+                                            resultCount = event.result.sources.size,
+                                            truncated = event.result.truncated,
+                                            errorCode = event.result.errorCode,
+                                        ),
+                                    )
+                                }
                                 _uiState.value = _uiState.value.copy(
                                     status = event.result.displayMessage
                                         ?: if (event.result.status == ToolExecutionStatus.SUCCEEDED) {
@@ -214,17 +268,33 @@ class ChatViewModel(
                                         } else {
                                             "Web search was not completed."
                                         },
+                                    webSearchPhase = if (event.result.status == ToolExecutionStatus.SUCCEEDED) {
+                                        WebSearchPhase.RESULTS_RECEIVED
+                                    } else {
+                                        WebSearchPhase.FAILED
+                                    },
                                 )
                             }
                             is ToolConversationEvent.ToolRejected -> {
                                 _uiState.value = _uiState.value.copy(
                                     status = "Web search declined: ${event.message}",
+                                    webSearchPhase = WebSearchPhase.FAILED,
                                 )
                             }
                         }
                     }
                 } else {
                     llm.stream(request).collect { chunk -> appendChunk(chunk) }
+                }
+                if (webSearchCompleted && responseText.isBlank()) {
+                    responseText.append(
+                        if (responseSources.isEmpty()) {
+                            "The web search completed, but the local model did not return a summary."
+                        } else {
+                            "The web search completed, but the local model did not return a summary. " +
+                                "Open a source below to inspect the information."
+                        },
+                    )
                 }
                 totalResponseTimeMillis = (System.nanoTime() - startedAtNanos) / 1_000_000L
                 publishResponse(streaming = false)
@@ -288,14 +358,27 @@ class ChatViewModel(
                 }
             }
         }
+        _uiState.value = _uiState.value.copy(
+            pendingToolCall = null,
+            status = "Searching the web…",
+            webSearchPhase = WebSearchPhase.SEARCHING,
+        )
         pendingToolDecision?.complete(ToolConfirmationDecision.Approved(approvedCall))
     }
 
     fun denyPendingTool() {
+        _uiState.value = _uiState.value.copy(
+            pendingToolCall = null,
+            status = "Web search cancelled.",
+            webSearchPhase = WebSearchPhase.CANCELLED,
+        )
         pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
     }
 
     private suspend fun awaitToolConfirmation(call: ValidatedToolCall): ToolConfirmationDecision {
+        if (!webSearchEnabledProvider()) {
+            return ToolConfirmationDecision.Denied
+        }
         val decision = CompletableDeferred<ToolConfirmationDecision>()
         pendingToolDecision?.complete(ToolConfirmationDecision.Denied)
         pendingToolDecision = decision
@@ -419,6 +502,9 @@ class ChatViewModel(
             toolPolicyProvider: ToolPolicyProvider = ToolPolicyProvider {
                 ToolConversationPolicy()
             },
+            toolMetricsRecorder: ToolMetricsRecorder? = null,
+            toolMetricsEnabledProvider: () -> Boolean = { false },
+            webSearchEnabledProvider: () -> Boolean = { true },
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -430,6 +516,9 @@ class ChatViewModel(
                             initialModelReady,
                             toolExecutionCoordinator,
                             toolPolicyProvider,
+                            toolMetricsRecorder,
+                            toolMetricsEnabledProvider,
+                            webSearchEnabledProvider,
                         ) as T
                     }
                     throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")

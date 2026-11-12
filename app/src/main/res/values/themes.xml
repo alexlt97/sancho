@@ -1,15 +1,15 @@
 <resources>
     <style name="Theme.Sancho" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#7EE787</item>
-        <item name="android:navigationBarColor">#090711</item>
-        <item name="android:statusBarColor">#090711</item>
+        <item name="android:colorAccent">#176B49</item>
+        <item name="android:navigationBarColor">#101216</item>
+        <item name="android:statusBarColor">#101216</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
     <style name="Theme.Sancho.VoiceSession" parent="Theme.Sancho">
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">#090711</item>
+        <item name="android:windowBackground">#101216</item>
         <item name="android:backgroundDimEnabled">false</item>
     </style>
 </resources>

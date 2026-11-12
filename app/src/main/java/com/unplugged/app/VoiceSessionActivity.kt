@@ -33,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,11 +90,11 @@ class VoiceSessionActivity : ComponentActivity() {
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
         window.setDimAmount(0f)
         setContent {
-            MaterialTheme(colorScheme = VoiceColors) {
+            SanchoTheme {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color(0xFF090711)),
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center,
                 ) {
                     VoiceBubble(
@@ -356,15 +355,6 @@ class VoiceSessionActivity : ComponentActivity() {
     }
 }
 
-private val VoiceColors = darkColorScheme(
-    primary = Color(0xFF7EE787),
-    onPrimary = Color(0xFF06210E),
-    secondary = Color(0xFFC9A7FF),
-    onSecondary = Color(0xFF24113F),
-    surface = Color(0xF01A1228),
-    onSurface = Color(0xFFF4EDFF),
-)
-
 @Composable
 private fun VoiceBubble(
     phase: VoicePhase,
@@ -385,12 +375,12 @@ private fun VoiceBubble(
         label = "voice-pulse",
     )
     val phaseColor = when (phase) {
-        VoicePhase.LISTENING -> Color(0xFF7EE787)
-        VoicePhase.THINKING -> Color(0xFFFFB454)
-        VoicePhase.SPEAKING -> Color(0xFFC9A7FF)
-        VoicePhase.READY -> Color(0xFF7EE787)
-        VoicePhase.ERROR -> Color(0xFFFF7B72)
-        VoicePhase.STOPPED -> Color(0xFFB8AEC9)
+        VoicePhase.LISTENING -> MaterialTheme.colorScheme.primary
+        VoicePhase.THINKING -> MaterialTheme.colorScheme.tertiary
+        VoicePhase.SPEAKING -> MaterialTheme.colorScheme.secondary
+        VoicePhase.READY -> MaterialTheme.colorScheme.primary
+        VoicePhase.ERROR -> MaterialTheme.colorScheme.error
+        VoicePhase.STOPPED -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Surface(
@@ -398,7 +388,7 @@ private fun VoiceBubble(
             .width(252.dp)
             .height(220.dp),
         shape = RoundedCornerShape(32.dp),
-        color = VoiceColors.surface,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 12.dp,
     ) {
         Column(
@@ -446,7 +436,7 @@ private fun VoiceBubble(
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = VoiceColors.onSurface.copy(alpha = 0.74f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
                 maxLines = 1,
                 textAlign = TextAlign.Center,
             )
@@ -457,7 +447,7 @@ private fun VoiceBubble(
                     "Tap the sphere to stop"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = VoiceColors.onSurface.copy(alpha = 0.62f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
             )
             if (showActions) {
                 TextButton(onClick = onExit) {

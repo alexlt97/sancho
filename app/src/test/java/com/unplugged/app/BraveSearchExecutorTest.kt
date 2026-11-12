@@ -58,6 +58,7 @@ class BraveSearchExecutorTest {
         assertTrue(requestedUrl.contains("api.search.brave.com"))
         assertTrue(result.untrusted)
         assertTrue(result.output.contains("https://one.example"))
+        assertEquals("One", result.sources.single().title)
     }
 
     @Test

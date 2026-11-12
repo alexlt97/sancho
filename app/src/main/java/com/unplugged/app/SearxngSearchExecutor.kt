@@ -123,9 +123,12 @@ class SearxngSearchExecutor(
         }
         return try {
             val payload = transport.get(buildSearxngSearchUrl(endpoint, arguments.query))
-            val output = formatSearxngResults(parseSearxngResults(payload))
+            val results = parseSearxngResults(payload)
+            val output = formatSearxngResults(results)
             ToolExecutionResult.success(call, output).copy(
                 displayMessage = "Web search completed in Sancho.",
+                sources = results.map { WebSource(title = it.title, url = it.url) },
+                provider = "searxng",
             )
         } catch (error: CancellationException) {
             throw error
@@ -146,6 +149,7 @@ class SearxngSearchExecutor(
             output = message,
             displayMessage = message,
             errorCode = code,
+            provider = "searxng",
         )
 }
 

@@ -193,6 +193,18 @@ enum class ToolExecutionStatus {
     TIMED_OUT,
 }
 
+data class WebSource(
+    val title: String,
+    val url: String,
+)
+
+data class WebSearchMetrics(
+    val provider: String?,
+    val status: ToolExecutionStatus,
+    val elapsedMillis: Long,
+    val resultCount: Int,
+)
+
 data class ToolExecutionResult(
     val callId: String,
     val tool: ToolName,
@@ -203,6 +215,8 @@ data class ToolExecutionResult(
     val elapsedMillis: Long = 0L,
     val errorCode: String? = null,
     val displayMessage: String? = null,
+    val sources: List<WebSource> = emptyList(),
+    val provider: String? = null,
 ) {
     companion object {
         fun success(call: ValidatedToolCall, output: String): ToolExecutionResult =
