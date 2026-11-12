@@ -24,10 +24,14 @@ require_file app/src/androidTest/java/com/unplugged/app/HarnessComparisonBenchma
 require_file app/src/androidTest/java/com/unplugged/app/LongPlainTextBenchmarkTest.kt
 require_file docs/model-harness-testing.md
 require_file docs/voice-testing.md
+require_file docs/f006-phone-test.md
 require_file app/src/main/java/com/unplugged/app/VoiceEntryPoint.kt
+require_file scripts/start-feature.py
 
 bash -n scripts/voice-preview.sh
-echo "[PASS] voice preview script syntax"
+bash -n scripts/ai-device.sh
+python3 -m py_compile scripts/start-feature.py
+echo "[PASS] repository script syntax"
 
 python3 - feature_list.json <<'PY'
 import json

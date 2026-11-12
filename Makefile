@@ -1,4 +1,4 @@
-.PHONY: setup build safety instrumentation-build install launch uninstall screenshot voice-log test check dev preview preview-stop voice-preview e2e harness-device-test benchmark gpu-benchmark vision-benchmark harness-comparison long-plain-text-benchmark device reports-analyze check-arch vcr verify-feature session-start session-end clean-check
+.PHONY: setup build safety instrumentation-build install launch uninstall screenshot voice-log tool-metrics test check dev preview preview-stop voice-preview e2e harness-device-test benchmark gpu-benchmark vision-benchmark harness-comparison long-plain-text-benchmark device reports-analyze check-arch vcr start-feature verify-feature session-start session-end clean-check
 
 setup:
 	@bash scripts/bootstrap-toolchain.sh
@@ -26,6 +26,9 @@ screenshot:
 
 voice-log:
 	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh voice-log
+
+tool-metrics:
+	@bash scripts/with-toolchain.sh bash scripts/ai-device.sh tool-metrics "$(OUT)"
 
 check:
 	@bash scripts/check.sh
@@ -78,6 +81,10 @@ check-arch:
 
 vcr:
 	@python3 scripts/vcr.py feature_list.json
+
+start-feature:
+	@test -n "$(F)" || (echo "Usage: make start-feature F=F000" >&2; exit 2)
+	@python3 scripts/start-feature.py "$(F)"
 
 verify-feature:
 	@test -n "$(F)" || (echo "Usage: make verify-feature F=F000" >&2; exit 2)

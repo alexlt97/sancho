@@ -15,7 +15,10 @@ to stop the server. Set `SANCHO_VOICE_PREVIEW_PORT` to use another local port.
 
 The preview includes interactive Chat, a concise Settings section list with
 Models, Voice settings, Reports, and Chat settings detail pages, and Reports.
-It uses the current galaxy theme, model status, import state, composer,
+It opens with a suggested adaptive dark theme: flatter neutral surfaces, no
+decorative stars behind chat, and a calmer semantic accent palette. Use the
+`Current galaxy` and `Suggested` controls to compare both directions. It uses
+the current model status, import state, composer,
 attachment menu, report export feedback, and voice controls. The voice controls simulate the
 1×1 widget/Quick Settings entry flow, Moonshine transcript, Gemma thinking phase,
 Android TextToSpeech phase, speed control, and cancellation. It uses only local

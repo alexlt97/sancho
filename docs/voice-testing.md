@@ -94,8 +94,10 @@ TextToSpeech, and the widget or Quick Settings entry point.
 
 ## Timing and visual diagnostics
 
-The widget and Quick Settings tile launch a dedicated voice activity, not the
-main chat activity. It shows an opaque Sancho voice surface with an animated
+The widget and the **Talk to Sancho** Quick Settings tile launch a dedicated
+voice activity, not the main chat activity. The tile uses a simple microphone
+and sparkle mark so its action remains recognizable at Quick Settings size. It
+shows an opaque Sancho voice surface with an animated
 central sphere while Moonshine is listening, Gemma is thinking, and
 TextToSpeech is speaking. Tapping the sphere stops the active session. After
 the answer finishes, tapping the same sphere starts the next prompt.

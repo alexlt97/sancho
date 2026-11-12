@@ -15,7 +15,8 @@ timeout, output limit, and execution route. The default route is an explicit
 Vanadium intent. The optional SearXNG route performs a bounded HTTPS request,
 and the optional Brave route calls Brave's LLM Context endpoint. Both routes
 normalize up to five results and return source URLs and extracted context as
-untrusted reference data to the local model.
+untrusted reference data to the local model. Completed assistant messages now
+show those bounded source links in a separate Sources panel.
 
 Brave requests include explicit JSON, identity encoding, no-cache, and a
 Sancho user-agent header. Identity encoding keeps diagnostic API errors
@@ -25,15 +26,29 @@ The current contract limits a query to 600 characters, requires confirmation,
 uses a ten-second execution limit, bounds a result to 20,000 characters, and
 allows one tool call and one tool-result turn per run by default. The browser
 handoff itself will return no web content; it will only launch the user-approved
-Vanadium search URL.
+Vanadium search URL. The chat surface shows an explicit waiting, searching,
+results, failure, or cancellation phase so approval does not leave a stale
+confirmation card on screen.
 
 Chat Settings can enable query preview/editing and raise the per-prompt call
-limit to five. The Brave API route also provides a connection check that sends
+limit to five, and can hide or show the source panel below web-grounded
+answers. When shown, each HTTPS source opens only in the explicit Vanadium
+package. The Brave API route also provides a connection check that sends
 only a fixed test query and reports success or a generic failure without
 showing the key or response contents. Safe HTTP categories such as invalid
 credentials, inactive authorization, quota/rate limiting, and network failure
-are distinguished in the settings message. Both settings are disabled by
-default and are read when a new prompt starts.
+are distinguished in the settings message. Query preview and multiple-search
+are disabled by default; web search remains approval-gated, and persistent tool
+metrics are disabled by default. Settings are read when a new prompt starts.
+
+F006 adds an explicit `Allow web search` setting, while confirmation remains
+required for every search. Search timing and result count are shown alongside
+assistant metrics when response metrics are enabled. A separate opt-in
+`Store web-search metrics` setting writes at most 100 app-private JSONL events;
+records contain only provider, status, duration, result count, truncation, and
+safe error category. Queries, URLs, prompts, response text, snippets, and API
+keys are never written. The user can clear the file in Chat Settings, and the
+terminal-first `make tool-metrics` command retrieves only that sanitized file.
 
 ## Execution boundary
 

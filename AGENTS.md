@@ -56,7 +56,7 @@ Terminal workflow:
 - `make harness-device-test` runs adversarial Chat/Vision and Voice/Agent prompts against the imported real model on the active AI-profile Pixel 9a.
 - `make benchmark`, `make gpu-benchmark`, and `make vision-benchmark` measure imported-model inference on the AI profile.
 - `make reports-analyze FILE=...` analyzes an exported report ZIP without network access.
-- `make check-arch`, `make vcr`, `make verify-feature F=<id>`, and `ALLOW_ACTIVE=1 make clean-check` enforce harness state.
+- `make check-arch`, `make vcr`, `make start-feature F=<id>`, `make verify-feature F=<id>`, and `ALLOW_ACTIVE=1 make clean-check` enforce harness state.
 - Android Studio is not required for development or verification.
 
 - Layer 1 — static: Gradle compilation, unit tests, lint, formatting, and architecture checks.
@@ -101,6 +101,7 @@ Tool permissions and scoped capabilities are recorded in `.harness/tool-policy.j
 - Cross-session state lives in `PROGRESS.md`, `DECISIONS.md`, and `feature_list.json`.
 - Feature states are `not_started/planned → active → passing`; skipping states is not allowed.
 - Only one feature may be `active` at a time (WIP=1).
+- Use `make start-feature F=<id>` to move a planned feature into the active WIP slot; it refuses unknown, passing, or conflicting features.
 - Never set a feature to `passing` directly; use `make verify-feature F=<id>`.
 - Each feature should be completable in one session. Split features that are larger.
 - Every passing feature must include verification evidence.

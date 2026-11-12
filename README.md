@@ -13,3 +13,5 @@ See [Version 1 scope and development notes](docs/v1.md) for the current implemen
 See [Version 2 planning](docs/v2.md) for the future tool-calling, internet, terminal, SSH, and phone-action roadmap.
 
 The real-model role safety test is documented in [model harness testing](docs/model-harness-testing.md) and runs with `make harness-device-test` on the active AI profile.
+
+Feature work follows the guarded harness workflow: run `make start-feature F=F002` to claim the single active WIP slot, then run `make verify-feature F=F002` after its declared layers pass.
